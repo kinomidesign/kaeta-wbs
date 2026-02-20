@@ -4,13 +4,18 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { DayPicker, DateRange } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
-import { ja } from 'date-fns/locale'
+// date-fns locale - 直接インポートでエラーが出る場合は動的にロード
+import * as dateFnsLocale from 'date-fns/locale'
 
-// Supabase クライアント
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const ja = dateFnsLocale.ja
+
+// Supabase クライアント - クライアントサイドでのみ作成
+const supabase = typeof window !== 'undefined'
+  ? createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  : null as unknown as ReturnType<typeof createClient>
 
 interface Task {
   id: number
@@ -236,6 +241,29 @@ export default function KaetaWBS() {
     setIndentPopup(null)
   }
 
+  // インデント増減（ホバーボタン用）
+  const changeIndent = async (e: React.MouseEvent, taskId: number, delta: number) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) return
+    const currentLevel = task.indent_level || 0
+    const newLevel = Math.max(0, Math.min(3, currentLevel + delta))
+    if (newLevel !== currentLevel) {
+      console.log('[changeIndent] taskId:', taskId, 'delta:', delta, 'newLevel:', newLevel)
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, indent_level: newLevel } : t))
+      const { error } = await supabase
+        .from('tasks')
+        .update({ indent_level: newLevel })
+        .eq('id', taskId)
+      if (error) {
+        console.error('[changeIndent] エラー:', error)
+        // エラー時は元に戻す
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, indent_level: currentLevel } : t))
+      }
+    }
+  }
+
   // タスクの折りたたみ/展開をトグル
   const toggleTaskCollapse = (taskId: number, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -281,6 +309,7 @@ export default function KaetaWBS() {
 
   // タスクリストのドラッグアンドドロップハンドラー
   const handleTaskDragStart = (e: React.DragEvent, task: Task) => {
+    console.log('[DragStart] タスク開始:', task.id, task.name)
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', task.id.toString())
     const indent = task.indent_level || 0
@@ -327,21 +356,27 @@ export default function KaetaWBS() {
   }
 
   const handleTaskDrop = async (e: React.DragEvent, targetTask: Task, position: 'before' | 'after' | 'child') => {
+    console.log('[Drop] ドロップ開始:', { targetTask: targetTask.name, position })
     e.preventDefault()
     e.stopPropagation()
 
     // stateから直接取得（dataTransferは信頼性が低い場合がある）
     const draggedTaskId = taskDragState.draggingTaskId
+    console.log('[Drop] draggingTaskId:', draggedTaskId)
+
     if (!draggedTaskId || draggedTaskId === targetTask.id) {
+      console.log('[Drop] 早期リターン: draggedTaskIdがnullまたは同じタスク')
       setTaskDragState(resetTaskDragState())
       return
     }
 
     const draggedTask = tasks.find(t => t.id === draggedTaskId)
     if (!draggedTask) {
+      console.log('[Drop] 早期リターン: draggedTaskが見つからない')
       setTaskDragState(resetTaskDragState())
       return
     }
+    console.log('[Drop] ドラッグ中のタスク:', draggedTask.name)
 
     // 同じカテゴリ内のタスクを取得してソート
     const sameCategoryTasks = tasks
@@ -383,24 +418,33 @@ export default function KaetaWBS() {
       updates.indent_level = taskDragState.previewIndent
     }
 
+    console.log('[Drop] 更新データ:', updates)
+
     // 楽観的更新
     const originalTask = { ...draggedTask }
     setTasks(prev => prev.map(t =>
       t.id === draggedTaskId ? { ...t, ...updates } : t
     ))
+    console.log('[Drop] 楽観的更新完了')
 
     // DB更新
-    const { error } = await supabase
+    console.log('[Drop] Supabase更新開始: taskId=', draggedTaskId)
+    const { error, data } = await supabase
       .from('tasks')
       .update(updates)
       .eq('id', draggedTaskId)
+      .select()
+
+    console.log('[Drop] Supabase更新結果:', { error, data })
 
     if (error) {
-      console.error('Error moving task:', error.message, error.details, error.hint)
+      console.error('[Drop] エラー:', error.message, error.details, error.hint, error.code)
       // エラー時は元に戻す
       setTasks(prev => prev.map(t =>
         t.id === draggedTaskId ? originalTask : t
       ))
+    } else {
+      console.log('[Drop] DB更新成功')
     }
 
     setTaskDragState(resetTaskDragState())
@@ -1078,7 +1122,9 @@ export default function KaetaWBS() {
                                   }}
                                   onDragLeave={handleTaskDragLeave}
                                   onDrop={(e) => {
+                                    console.log('[onDrop] イベント発火:', task.name)
                                     const position = taskDragState.dropTarget?.position || 'after'
+                                    console.log('[onDrop] position:', position, 'dropTarget:', taskDragState.dropTarget)
                                     handleTaskDrop(e, task, position)
                                   }}
                                   onClick={() => openTaskModal('edit', task)}
@@ -1134,19 +1180,32 @@ export default function KaetaWBS() {
                                           </svg>
                                         </span>
                                       )}
-                                      {/* インデントボタン - クリックでポップアップ */}
+                                      {/* インデント減少ボタン（左矢印） */}
                                       <button
                                         type="button"
                                         draggable={false}
                                         onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => openIndentPopup(task, e)}
-                                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted opacity-0 group-hover/task:opacity-100 transition-opacity"
-                                        title="階層を変更"
+                                        onClick={(e) => changeIndent(e, task.id, -1)}
+                                        disabled={indentLevel === 0}
+                                        className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted opacity-0 group-hover/task:opacity-100 transition-opacity ${indentLevel === 0 ? 'cursor-not-allowed opacity-30' : ''}`}
+                                        title="階層を上げる（親に近づく）"
                                       >
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                          <line x1="2" y1="3" x2="12" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                          <line x1="4" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                          <line x1="6" y1="11" x2="12" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                          <path d="M8 2L4 6L8 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                        </svg>
+                                      </button>
+                                      {/* インデント増加ボタン（右矢印） */}
+                                      <button
+                                        type="button"
+                                        draggable={false}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => changeIndent(e, task.id, 1)}
+                                        disabled={indentLevel >= 3}
+                                        className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted opacity-0 group-hover/task:opacity-100 transition-opacity ${indentLevel >= 3 ? 'cursor-not-allowed opacity-30' : ''}`}
+                                        title="階層を下げる（子に近づく）"
+                                      >
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                          <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                         </svg>
                                       </button>
                                     </div>
