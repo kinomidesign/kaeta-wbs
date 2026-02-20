@@ -977,6 +977,10 @@ export default function KaetaWBS() {
             onClick={(e) => {
               e.stopPropagation()
               setViewStartDate(new Date().toISOString().split('T')[0])
+              // ガントチャートの横スクロール位置もリセット
+              if (ganttRef.current) {
+                ganttRef.current.scrollLeft = 0
+              }
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-dashboard-border hover:bg-gray-50 transition-colors text-accent-blue-text-text"
             title="チャートの先頭を今日に移動"
