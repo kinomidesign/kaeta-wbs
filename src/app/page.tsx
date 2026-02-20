@@ -141,9 +141,58 @@ export default function KaetaWBS() {
   // タスクの折りたたみ状態（親タスクIDをキーとして、折りたたんでいるかどうか）
   const [collapsedTasks, setCollapsedTasks] = useState<Record<number, boolean>>({})
 
+  // テーブルエリアの幅調整用
+  const [tableWidth, setTableWidth] = useState(450)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartXRef = useRef(0)
+  const resizeStartWidthRef = useRef(450)
+
   // スクロール連動用
   const taskListRef = useRef<HTMLDivElement>(null)
   const mainScrollRef = useRef<HTMLDivElement>(null)
+
+  // 日付クリックでガントチャートをスクロール
+  const scrollToTaskDate = (startDate: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const daysFromStart = getDaysFromStart(startDate, viewStartDate)
+    if (mainScrollRef.current) {
+      const scrollPosition = tableWidth + (daysFromStart * 32) - 100 // 少し余白を持たせる
+      mainScrollRef.current.scrollTo({
+        left: Math.max(0, scrollPosition),
+        behavior: 'smooth'
+      })
+    }
+  }
+
+  // テーブルエリアのリサイズハンドラー
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    resizeStartXRef.current = e.clientX
+    resizeStartWidthRef.current = tableWidth
+  }
+
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleResizeMove = (e: MouseEvent) => {
+      const delta = e.clientX - resizeStartXRef.current
+      const newWidth = Math.max(300, Math.min(800, resizeStartWidthRef.current + delta))
+      setTableWidth(newWidth)
+    }
+
+    const handleResizeEnd = () => {
+      setIsResizing(false)
+    }
+
+    document.addEventListener('mousemove', handleResizeMove)
+    document.addEventListener('mouseup', handleResizeEnd)
+
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove)
+      document.removeEventListener('mouseup', handleResizeEnd)
+    }
+  }, [isResizing])
 
   // データ取得
   useEffect(() => {
@@ -931,16 +980,31 @@ export default function KaetaWBS() {
       {/* Main Content */}
       <div
         ref={mainScrollRef}
-        className="flex overflow-auto"
+        className={`flex overflow-auto ${isResizing ? 'cursor-col-resize select-none' : ''}`}
         style={{ height: 'calc(100vh - 140px)' }}
         onClick={() => { setStatusPopup(null); setIndentPopup(null); }}
       >
         {/* Task List (Left) */}
-        <div ref={taskListRef} className="w-[450px] flex-shrink-0 bg-dashboard-card border-r border-dashboard-border">
+        <div ref={taskListRef} className="flex-shrink-0 bg-dashboard-card relative" style={{ width: `${tableWidth}px` }}>
+          {/* リサイズハンドル */}
+          <div
+            className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-30 group hover:bg-[#009EA4] transition-colors ${isResizing ? 'bg-[#009EA4]' : 'bg-dashboard-border'}`}
+            onMouseDown={handleResizeStart}
+          >
+            {/* ホバー時のリサイズアイコン */}
+            <div className="absolute top-1/2 -translate-y-1/2 -right-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <div className="bg-[#009EA4] rounded-full p-1.5 shadow-md">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
+                  <path d="M2 6L4.5 3.5V8.5L2 6ZM10 6L7.5 3.5V8.5L10 6Z" />
+                </svg>
+              </div>
+            </div>
+          </div>
           <div className="sticky top-0 bg-gray-50 border-b border-dashboard-border px-4 py-2 text-xs font-medium text-dashboard-text-muted grid grid-cols-12 gap-2 z-20">
-            <div className="col-span-5">タスク名</div>
-            <div className="col-span-4">担当</div>
-            <div className="col-span-3">状態</div>
+            <div className="col-span-5">タスク</div>
+            <div className="col-span-2 text-center">担当者</div>
+            <div className="col-span-3 text-center">期限</div>
+            <div className="col-span-2 text-center">ステータス</div>
           </div>
 
           {Object.entries(groupedByPhase).map(([phase, categories]) => (
@@ -1158,7 +1222,6 @@ export default function KaetaWBS() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
-                                      <p className="text-xs text-dashboard-text-muted">{task.start_date} 〜 {task.end_date}</p>
                                     </div>
                                   </div>
 
@@ -1191,12 +1254,25 @@ export default function KaetaWBS() {
                                     {/* 下向き三角（吹き出しの矢印） */}
                                     <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-white border-r border-b border-gray-200 rotate-45"></div>
                                   </div>
-                                  <div className="col-span-4">
+                                  <div className="col-span-2 flex items-center justify-center">
                                     <span className={`text-xs px-2 py-1 rounded border ${getOwnerColor(task.owner)}`}>
                                       {task.owner}
                                     </span>
                                   </div>
-                                  <div className="col-span-3">
+                                  <div className="col-span-3 flex items-center justify-center">
+                                    <button
+                                      type="button"
+                                      draggable={false}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => scrollToTaskDate(task.start_date, e)}
+                                      className="text-xs hover:underline cursor-pointer"
+                                      style={{ color: '#009EA4' }}
+                                      title="クリックで開始日にスクロール"
+                                    >
+                                      {task.start_date.replace(/-/g, '/').slice(5)} - {task.end_date.replace(/-/g, '/').slice(5)}
+                                    </button>
+                                  </div>
+                                  <div className="col-span-2 flex items-center justify-center">
                                     <button
                                       type="button"
                                       draggable={false}
@@ -1262,18 +1338,32 @@ export default function KaetaWBS() {
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6
                 const isMonday = date.getDay() === 1
                 const isFirstOfMonth = date.getDate() === 1
+                const today = new Date()
+                const isToday = date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear()
                 return (
                   <div
                     key={i}
                     className={`w-8 flex-shrink-0 text-center border-r border-gray-100 ${isWeekend ? 'bg-gray-50' : ''}`}
                   >
                     {(isMonday || isFirstOfMonth || i === 0) && (
-                      <div className="text-xs text-accent-blue font-medium py-1 border-b border-dashboard-border bg-gray-50">
+                      <div
+                        className={`text-xs font-medium py-1 border-b bg-gray-50 ${isToday ? 'border-b-2' : 'border-dashboard-border'}`}
+                        style={{
+                          color: '#009EA4',
+                          borderBottomColor: isToday ? '#009EA4' : undefined
+                        }}
+                      >
                         {date.getMonth() + 1}/{date.getDate()}
                       </div>
                     )}
                     {!(isMonday || isFirstOfMonth || i === 0) && (
-                      <div className="text-xs text-dashboard-text-muted py-1 border-b border-dashboard-border">
+                      <div
+                        className={`text-xs py-1 ${isToday ? 'border-b-2 font-medium' : 'border-b border-dashboard-border'}`}
+                        style={{
+                          color: isToday ? '#009EA4' : undefined,
+                          borderBottomColor: isToday ? '#009EA4' : undefined
+                        }}
+                      >
                         {date.getDate()}
                       </div>
                     )}
