@@ -98,6 +98,8 @@ export default function KaetaWBS() {
       category?: string
     } | null
   }>({ draggingTaskId: null, dropTarget: null })
+  // ドラッグオーバーのスロットリング用
+  const lastDropTargetRef = useRef<string | null>(null)
 
   // 新規/編集タスク用の状態
   const [editingTask, setEditingTask] = useState({
@@ -200,23 +202,14 @@ export default function KaetaWBS() {
   }
 
   // インデント操作（楽観的更新でカクつき軽減）
-  const changeIndent = async (task: Task, delta: number, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const changeIndent = async (task: Task, delta: number) => {
     const currentLevel = task.indent_level || 0
     const newLevel = Math.max(0, Math.min(3, currentLevel + delta))
     if (newLevel !== currentLevel) {
       // 即座にUIを更新（楽観的更新）
       setTasks(prev => prev.map(t => t.id === task.id ? { ...t, indent_level: newLevel } : t))
-      // バックグラウンドでDB更新
-      const { error } = await supabase
-        .from('tasks')
-        .update({ indent_level: newLevel, updated_at: new Date().toISOString() })
-        .eq('id', task.id)
-      if (error) {
-        console.error('Error updating indent:', error)
-        // エラー時は元に戻す
-        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, indent_level: currentLevel } : t))
-      }
+      // バックグラウンドでDB更新（updateTask関数を使用）
+      await updateTask(task.id, 'indent_level', newLevel)
     }
   }
 
@@ -231,6 +224,11 @@ export default function KaetaWBS() {
     e.preventDefault()
     e.stopPropagation()
     if (taskDragState.draggingTaskId === targetTask.id) return
+
+    // スロットリング: 同じターゲットなら更新しない
+    const targetKey = `${targetTask.id}-${position}`
+    if (lastDropTargetRef.current === targetKey) return
+    lastDropTargetRef.current = targetKey
 
     setTaskDragState(prev => ({
       ...prev,
@@ -281,26 +279,32 @@ export default function KaetaWBS() {
     }
 
     // 楽観的更新
+    const originalTask = { ...draggedTask }
     setTasks(prev => prev.map(t =>
       t.id === draggedTaskId ? { ...t, ...updates } : t
     ))
 
-    // DB更新
+    // DB更新（updated_atは省略 - DBのトリガーで自動更新される場合がある）
     const { error } = await supabase
       .from('tasks')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', draggedTaskId)
 
     if (error) {
-      console.error('Error moving task:', error)
-      fetchTasks() // エラー時は再取得
+      console.error('Error moving task:', error.message, error.details, error.hint)
+      // エラー時は元に戻す
+      setTasks(prev => prev.map(t =>
+        t.id === draggedTaskId ? originalTask : t
+      ))
     }
 
     setTaskDragState({ draggingTaskId: null, dropTarget: null })
+    lastDropTargetRef.current = null
   }
 
   const handleTaskDragEnd = () => {
     setTaskDragState({ draggingTaskId: null, dropTarget: null })
+    lastDropTargetRef.current = null
   }
 
   // タスク追加
@@ -815,15 +819,20 @@ export default function KaetaWBS() {
 
                   // カテゴリなしでフェーズに移動
                   const updates = { phase, category: '', indent_level: 0 }
+                  const originalTask = { ...draggedTask }
                   setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, ...updates } : t))
 
                   const { error } = await supabase
                     .from('tasks')
-                    .update({ ...updates, updated_at: new Date().toISOString() })
+                    .update(updates)
                     .eq('id', draggedTaskId)
 
-                  if (error) fetchTasks()
+                  if (error) {
+                    console.error('Error moving to phase:', error.message)
+                    setTasks(prev => prev.map(t => t.id === draggedTaskId ? originalTask : t))
+                  }
                   setTaskDragState({ draggingTaskId: null, dropTarget: null })
+                  lastDropTargetRef.current = null
                 }}
                 className={`bg-gray-100 text-dashboard-text-main px-4 py-3 text-sm font-semibold sticky top-8 z-10 cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border transition-all
                   ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === '' && taskDragState.dropTarget?.taskId === null ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/20' : ''}
@@ -862,15 +871,20 @@ export default function KaetaWBS() {
                           if (!draggedTask) return
 
                           const updates = { phase, category, indent_level: 0 }
+                          const originalTask = { ...draggedTask }
                           setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, ...updates } : t))
 
                           const { error } = await supabase
                             .from('tasks')
-                            .update({ ...updates, updated_at: new Date().toISOString() })
+                            .update(updates)
                             .eq('id', draggedTaskId)
 
-                          if (error) fetchTasks()
+                          if (error) {
+                            console.error('Error moving to category:', error.message)
+                            setTasks(prev => prev.map(t => t.id === draggedTaskId ? originalTask : t))
+                          }
                           setTaskDragState({ draggingTaskId: null, dropTarget: null })
+                          lastDropTargetRef.current = null
                         }}
                         className={`bg-gray-50 text-dashboard-text-main px-4 py-2 pl-8 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-between border-b border-dashboard-border transition-all
                           ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === category && taskDragState.dropTarget?.taskId === null ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/10' : ''}
@@ -972,8 +986,7 @@ export default function KaetaWBS() {
                                       <button
                                         type="button"
                                         draggable={false}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => { e.preventDefault(); changeIndent(task, -1, e); }}
+                                        onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); changeIndent(task, -1); }}
                                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
                                         title="インデント減"
                                       >
@@ -986,8 +999,7 @@ export default function KaetaWBS() {
                                       <button
                                         type="button"
                                         draggable={false}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => { e.preventDefault(); changeIndent(task, 1, e); }}
+                                        onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); changeIndent(task, 1); }}
                                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
                                         title="インデント増"
                                       >
