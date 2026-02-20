@@ -100,6 +100,8 @@ export default function KaetaWBS() {
   const ganttRef = useRef<HTMLDivElement>(null)
   // ドラッグが発生したかどうか（クリックと区別するため）
   const hasDraggedRef = useRef<boolean>(false)
+  // スクロール同期中フラグ（無限ループ防止）
+  const isSyncingScrollRef = useRef<boolean>(false)
 
   // タスクリストドラッグ＆ドロップ関連の状態
   const [taskDragState, setTaskDragState] = useState<{
@@ -162,6 +164,29 @@ export default function KaetaWBS() {
     e.stopPropagation()
     // ガントチャートの左端が開始日になるようにviewStartDateを変更
     setViewStartDate(startDate)
+  }
+
+  // テーブルとガントチャートの縦スクロール同期
+  const handleTaskListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (isSyncingScrollRef.current) return
+    isSyncingScrollRef.current = true
+    if (ganttRef.current) {
+      ganttRef.current.scrollTop = e.currentTarget.scrollTop
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false
+    })
+  }
+
+  const handleGanttScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (isSyncingScrollRef.current) return
+    isSyncingScrollRef.current = true
+    if (taskListRef.current) {
+      taskListRef.current.scrollTop = e.currentTarget.scrollTop
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false
+    })
   }
 
   // テーブルエリアのリサイズハンドラー
@@ -1007,7 +1032,7 @@ export default function KaetaWBS() {
         onClick={() => { setStatusPopup(null); setIndentPopup(null); }}
       >
         {/* Task List (Left) - 縦スクロールのみ */}
-        <div ref={taskListRef} className="flex-shrink-0 bg-dashboard-card relative overflow-y-auto overflow-x-hidden" style={{ width: `${tableWidth}px` }}>
+        <div ref={taskListRef} onScroll={handleTaskListScroll} className="flex-shrink-0 bg-dashboard-card relative overflow-y-auto overflow-x-hidden" style={{ width: `${tableWidth}px` }}>
           {/* リサイズハンドル */}
           <div
             className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-30 group hover:bg-[#009EA4] transition-colors ${isResizing ? 'bg-[#009EA4]' : 'bg-dashboard-border'}`}
@@ -1350,6 +1375,7 @@ export default function KaetaWBS() {
         <div
           ref={ganttRef}
           className="flex-1 min-w-0 overflow-x-auto overflow-y-auto"
+          onScroll={handleGanttScroll}
           onMouseMove={handleDragMove}
           onMouseUp={handleDragEnd}
           onMouseLeave={handleDragEnd}
