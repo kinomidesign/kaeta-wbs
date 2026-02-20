@@ -94,6 +94,8 @@ export default function KaetaWBS() {
     originalEnd: string
   }>({ taskId: null, type: null, startX: 0, originalStart: '', originalEnd: '' })
   const ganttRef = useRef<HTMLDivElement>(null)
+  // ドラッグが発生したかどうか（クリックと区別するため）
+  const hasDraggedRef = useRef<boolean>(false)
 
   // タスクリストドラッグ＆ドロップ関連の状態
   const [taskDragState, setTaskDragState] = useState<{
@@ -151,17 +153,11 @@ export default function KaetaWBS() {
   const taskListRef = useRef<HTMLDivElement>(null)
   const mainScrollRef = useRef<HTMLDivElement>(null)
 
-  // 日付クリックでガントチャートをスクロール
+  // 日付クリックでガントチャートの表示開始日を変更
   const scrollToTaskDate = (startDate: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    const daysFromStart = getDaysFromStart(startDate, viewStartDate)
-    if (mainScrollRef.current) {
-      const scrollPosition = tableWidth + (daysFromStart * 32) - 100 // 少し余白を持たせる
-      mainScrollRef.current.scrollTo({
-        left: Math.max(0, scrollPosition),
-        behavior: 'smooth'
-      })
-    }
+    // ガントチャートの左端が開始日になるようにviewStartDateを変更
+    setViewStartDate(startDate)
   }
 
   // テーブルエリアのリサイズハンドラー
@@ -768,6 +764,7 @@ export default function KaetaWBS() {
   const handleDragStart = (e: React.MouseEvent, task: Task, type: 'move' | 'resize-start' | 'resize-end') => {
     e.stopPropagation()
     e.preventDefault()
+    hasDraggedRef.current = false // ドラッグ開始時にリセット
     setDragState({
       taskId: task.id,
       type,
@@ -784,6 +781,9 @@ export default function KaetaWBS() {
     const daysDelta = Math.round(deltaX / 32)
 
     if (daysDelta === 0) return
+
+    // 実際にドラッグが発生した
+    hasDraggedRef.current = true
 
     const task = tasks.find(t => t.id === dragState.taskId)
     if (!task) return
@@ -1347,7 +1347,7 @@ export default function KaetaWBS() {
                   >
                     {(isMonday || isFirstOfMonth || i === 0) && (
                       <div
-                        className={`text-xs font-medium py-1 border-b bg-gray-50 ${isToday ? 'border-b-2' : 'border-dashboard-border'}`}
+                        className={`text-xs font-medium py-1 border-b bg-gray-50 ${isToday ? 'border-b-4' : 'border-dashboard-border'}`}
                         style={{
                           color: '#009EA4',
                           borderBottomColor: isToday ? '#009EA4' : undefined
@@ -1358,7 +1358,7 @@ export default function KaetaWBS() {
                     )}
                     {!(isMonday || isFirstOfMonth || i === 0) && (
                       <div
-                        className={`text-xs py-1 ${isToday ? 'border-b-2 font-medium' : 'border-b border-dashboard-border'}`}
+                        className={`text-xs py-1 ${isToday ? 'border-b-4 font-medium' : 'border-b border-dashboard-border'}`}
                         style={{
                           color: isToday ? '#009EA4' : undefined,
                           borderBottomColor: isToday ? '#009EA4' : undefined
@@ -1398,7 +1398,14 @@ export default function KaetaWBS() {
                               <div
                                 key={task.id}
                                 className={`h-12 flex items-center border-b border-gray-100 relative ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}`}
-                                onClick={() => openTaskModal('edit', task)}
+                                onClick={() => {
+                                  // ドラッグが発生した場合はタスク編集画面を開かない
+                                  if (hasDraggedRef.current) {
+                                    hasDraggedRef.current = false
+                                    return
+                                  }
+                                  openTaskModal('edit', task)
+                                }}
                               >
                                 <div className="absolute inset-0 flex">
                                   {ganttDateRange.map((date, i) => {
