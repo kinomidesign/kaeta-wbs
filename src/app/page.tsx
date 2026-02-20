@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 // Supabase クライアント
@@ -37,6 +37,22 @@ export default function KaetaWBS() {
   const owners = ['エンジニア', 'デザイナー', '共同']
   const priorities = ['必須', '推奨', '任意']
   const phases = ['Phase 1', 'Phase 1.5', 'Phase 2']
+
+  // 既存カテゴリを抽出
+  const existingCategories = useMemo(() => {
+    const categories = [...new Set(tasks.map(t => t.category).filter(Boolean))]
+    return categories.sort()
+  }, [tasks])
+
+  // ドラッグ関連の状態
+  const [dragState, setDragState] = useState<{
+    taskId: number | null
+    type: 'move' | 'resize-start' | 'resize-end' | null
+    startX: number
+    originalStart: string
+    originalEnd: string
+  }>({ taskId: null, type: null, startX: 0, originalStart: '', originalEnd: '' })
+  const ganttRef = useRef<HTMLDivElement>(null)
 
   // データ取得
   useEffect(() => {
@@ -208,6 +224,89 @@ export default function KaetaWBS() {
 
   const dateRange = generateDateRange(viewStartDate)
 
+  // ドラッグ操作のハンドラー
+  const handleDragStart = (e: React.MouseEvent, task: Task, type: 'move' | 'resize-start' | 'resize-end') => {
+    e.stopPropagation()
+    e.preventDefault()
+    setDragState({
+      taskId: task.id,
+      type,
+      startX: e.clientX,
+      originalStart: task.start_date,
+      originalEnd: task.end_date
+    })
+  }
+
+  const handleDragMove = (e: React.MouseEvent) => {
+    if (!dragState.taskId || !dragState.type) return
+
+    const deltaX = e.clientX - dragState.startX
+    const daysDelta = Math.round(deltaX / 32) // 32px = 1日
+
+    if (daysDelta === 0) return
+
+    const task = tasks.find(t => t.id === dragState.taskId)
+    if (!task) return
+
+    const originalStart = new Date(dragState.originalStart)
+    const originalEnd = new Date(dragState.originalEnd)
+
+    let newStart = task.start_date
+    let newEnd = task.end_date
+
+    if (dragState.type === 'move') {
+      const newStartDate = new Date(originalStart)
+      newStartDate.setDate(newStartDate.getDate() + daysDelta)
+      const newEndDate = new Date(originalEnd)
+      newEndDate.setDate(newEndDate.getDate() + daysDelta)
+      newStart = newStartDate.toISOString().split('T')[0]
+      newEnd = newEndDate.toISOString().split('T')[0]
+    } else if (dragState.type === 'resize-start') {
+      const newStartDate = new Date(originalStart)
+      newStartDate.setDate(newStartDate.getDate() + daysDelta)
+      if (newStartDate < originalEnd) {
+        newStart = newStartDate.toISOString().split('T')[0]
+      }
+    } else if (dragState.type === 'resize-end') {
+      const newEndDate = new Date(originalEnd)
+      newEndDate.setDate(newEndDate.getDate() + daysDelta)
+      if (newEndDate > originalStart) {
+        newEnd = newEndDate.toISOString().split('T')[0]
+      }
+    }
+
+    // ローカル更新のみ（ドラッグ中）
+    setTasks(tasks.map(t =>
+      t.id === dragState.taskId ? { ...t, start_date: newStart, end_date: newEnd } : t
+    ))
+  }
+
+  const handleDragEnd = async () => {
+    if (!dragState.taskId) return
+
+    const task = tasks.find(t => t.id === dragState.taskId)
+    if (task && (task.start_date !== dragState.originalStart || task.end_date !== dragState.originalEnd)) {
+      // DB更新
+      setSaving(true)
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          start_date: task.start_date,
+          end_date: task.end_date,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', dragState.taskId)
+
+      if (error) {
+        console.error('Error updating task:', error)
+        fetchTasks()
+      }
+      setSaving(false)
+    }
+
+    setDragState({ taskId: null, type: null, startX: 0, originalStart: '', originalEnd: '' })
+  }
+
   // フィルタリング
   const filteredTasks = tasks.filter(task => {
     if (filterPhase !== 'all' && task.phase !== filterPhase) return false
@@ -340,7 +439,13 @@ export default function KaetaWBS() {
         </div>
 
         {/* Gantt Chart (Right) */}
-        <div className="flex-1 overflow-x-auto overflow-y-auto">
+        <div
+          ref={ganttRef}
+          className="flex-1 overflow-x-auto overflow-y-auto"
+          onMouseMove={handleDragMove}
+          onMouseUp={handleDragEnd}
+          onMouseLeave={handleDragEnd}
+        >
           <div className="sticky top-0 bg-white z-20 border-b border-gray-200">
             <div className="flex">
               {dateRange.map((date, i) => {
@@ -396,15 +501,31 @@ export default function KaetaWBS() {
                     
                     {startOffset >= 0 && startOffset < 56 && (
                       <div
-                        className={`absolute h-6 rounded ${getBarColor(task.owner)} ${task.status === '完了' ? 'opacity-50' : ''} cursor-pointer hover:opacity-80 flex items-center px-2`}
+                        className={`absolute h-6 rounded ${getBarColor(task.owner)} ${task.status === '完了' ? 'opacity-50' : ''} flex items-center group select-none`}
                         style={{
                           left: `${startOffset * 32}px`,
-                          width: `${Math.min(duration, 56 - startOffset) * 32 - 4}px`
+                          width: `${Math.max(Math.min(duration, 56 - startOffset) * 32 - 4, 32)}px`
                         }}
                       >
-                        <span className="text-xs text-white truncate font-medium">
-                          {task.name}
-                        </span>
+                        {/* 左端リサイズハンドル */}
+                        <div
+                          className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/30 rounded-l"
+                          onMouseDown={(e) => handleDragStart(e, task, 'resize-start')}
+                        />
+                        {/* 中央ドラッグ領域 */}
+                        <div
+                          className="flex-1 h-full flex items-center justify-center cursor-move px-2"
+                          onMouseDown={(e) => handleDragStart(e, task, 'move')}
+                        >
+                          <span className="text-xs text-white truncate font-medium pointer-events-none">
+                            {task.name}
+                          </span>
+                        </div>
+                        {/* 右端リサイズハンドル */}
+                        <div
+                          className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/30 rounded-r"
+                          onMouseDown={(e) => handleDragStart(e, task, 'resize-end')}
+                        />
                       </div>
                     )}
                   </div>
@@ -552,49 +673,96 @@ export default function KaetaWBS() {
                   />
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">フェーズ</label>
-                    <select
-                      value={newTask.phase}
-                      onChange={(e) => setNewTask({ ...newTask, phase: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    >
-                      {phases.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">フェーズ</label>
+                  <div className="flex gap-2">
+                    {phases.map(p => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setNewTask({ ...newTask, phase: p })}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          newTask.phase === p
+                            ? `${getPhaseColor(p)} text-white shadow-md`
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">カテゴリ</label>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">カテゴリ</label>
+                  <select
+                    value={existingCategories.includes(newTask.category) ? newTask.category : '__new__'}
+                    onChange={(e) => {
+                      if (e.target.value === '__new__') {
+                        setNewTask({ ...newTask, category: '' })
+                      } else {
+                        setNewTask({ ...newTask, category: e.target.value })
+                      }
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  >
+                    <option value="">カテゴリを選択</option>
+                    {existingCategories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    <option value="__new__">+ 新規カテゴリを追加</option>
+                  </select>
+                  {!existingCategories.includes(newTask.category) && (
                     <input
                       type="text"
                       value={newTask.category}
                       onChange={(e) => setNewTask({ ...newTask, category: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="例: コア機能開発"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 mt-2"
+                      placeholder="新規カテゴリ名を入力"
                     />
-                  </div>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">担当者</label>
-                    <select
-                      value={newTask.owner}
-                      onChange={(e) => setNewTask({ ...newTask, owner: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    >
-                      {owners.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">担当者</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {owners.map(o => (
+                        <button
+                          key={o}
+                          type="button"
+                          onClick={() => setNewTask({ ...newTask, owner: o })}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all ${
+                            newTask.owner === o
+                              ? `${getOwnerColor(o)} border-current ring-2 ring-offset-1`
+                              : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                          }`}
+                        >
+                          {o}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">優先度</label>
-                    <select
-                      value={newTask.priority}
-                      onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    >
-                      {priorities.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">優先度</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {priorities.map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setNewTask({ ...newTask, priority: p })}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-all ${
+                            newTask.priority === p
+                              ? p === '必須' ? 'bg-red-100 text-red-700 border-red-300 ring-2 ring-red-200 ring-offset-1'
+                              : p === '推奨' ? 'bg-yellow-100 text-yellow-700 border-yellow-300 ring-2 ring-yellow-200 ring-offset-1'
+                              : 'bg-gray-100 text-gray-700 border-gray-300 ring-2 ring-gray-200 ring-offset-1'
+                              : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 
