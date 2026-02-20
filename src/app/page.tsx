@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { DayPicker, DateRange } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
+import { IndentDecrease, IndentIncrease } from 'lucide-react'
 // date-fns locale - 直接インポートでエラーが出る場合は動的にロード
 import * as dateFnsLocale from 'date-fns/locale'
 
@@ -250,14 +251,13 @@ export default function KaetaWBS() {
     const currentLevel = task.indent_level || 0
     const newLevel = Math.max(0, Math.min(3, currentLevel + delta))
     if (newLevel !== currentLevel) {
-      console.log('[changeIndent] taskId:', taskId, 'delta:', delta, 'newLevel:', newLevel)
       setTasks(prev => prev.map(t => t.id === taskId ? { ...t, indent_level: newLevel } : t))
       const { error } = await supabase
         .from('tasks')
         .update({ indent_level: newLevel })
         .eq('id', taskId)
       if (error) {
-        console.error('[changeIndent] エラー:', error)
+        console.error('Error changing indent:', error)
         // エラー時は元に戻す
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, indent_level: currentLevel } : t))
       }
@@ -309,7 +309,6 @@ export default function KaetaWBS() {
 
   // タスクリストのドラッグアンドドロップハンドラー
   const handleTaskDragStart = (e: React.DragEvent, task: Task) => {
-    console.log('[DragStart] タスク開始:', task.id, task.name)
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', task.id.toString())
     const indent = task.indent_level || 0
@@ -356,29 +355,21 @@ export default function KaetaWBS() {
   }
 
   const handleTaskDrop = async (e: React.DragEvent, targetTask: Task, position: 'before' | 'after' | 'child') => {
-    console.log('[Drop] ドロップ開始:', { targetTask: targetTask.name, position })
     e.preventDefault()
     e.stopPropagation()
 
-    // stateから直接取得（dataTransferは信頼性が低い場合がある）
     const draggedTaskId = taskDragState.draggingTaskId
-    console.log('[Drop] draggingTaskId:', draggedTaskId)
-
     if (!draggedTaskId || draggedTaskId === targetTask.id) {
-      console.log('[Drop] 早期リターン: draggedTaskIdがnullまたは同じタスク')
       setTaskDragState(resetTaskDragState())
       return
     }
 
     const draggedTask = tasks.find(t => t.id === draggedTaskId)
     if (!draggedTask) {
-      console.log('[Drop] 早期リターン: draggedTaskが見つからない')
       setTaskDragState(resetTaskDragState())
       return
     }
-    console.log('[Drop] ドラッグ中のタスク:', draggedTask.name)
-
-    // 同じカテゴリ内のタスクを取得してソート
+    // 移動先カテゴリ内のタスクを取得してソート（ドラッグ中のタスクを除外）
     const sameCategoryTasks = tasks
       .filter(t => t.phase === targetTask.phase && t.category === targetTask.category && t.id !== draggedTaskId)
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -386,19 +377,33 @@ export default function KaetaWBS() {
     // ターゲットのインデックスを取得
     const targetIndex = sameCategoryTasks.findIndex(t => t.id === targetTask.id)
 
-    // 新しいsort_orderを計算
+    // 新しいsort_orderを計算（より堅牢なロジック）
     let newSortOrder: number
+    const SORT_GAP = 1000 // タスク間の基本間隔
+
     if (position === 'before') {
       const prevTask = sameCategoryTasks[targetIndex - 1]
-      const prevOrder = prevTask?.sort_order ?? 0
-      const targetOrder = targetTask.sort_order ?? 0
-      newSortOrder = prevTask ? (prevOrder + targetOrder) / 2 : targetOrder - 1
+      const targetOrder = targetTask.sort_order ?? (targetIndex * SORT_GAP)
+      if (prevTask) {
+        const prevOrder = prevTask.sort_order ?? ((targetIndex - 1) * SORT_GAP)
+        // 前のタスクとターゲットの中間値
+        newSortOrder = (prevOrder + targetOrder) / 2
+      } else {
+        // 先頭に配置
+        newSortOrder = targetOrder - SORT_GAP
+      }
     } else {
       // after または child
       const nextTask = sameCategoryTasks[targetIndex + 1]
-      const targetOrder = targetTask.sort_order ?? 0
-      const nextOrder = nextTask?.sort_order ?? (targetOrder + 2)
-      newSortOrder = (targetOrder + nextOrder) / 2
+      const targetOrder = targetTask.sort_order ?? (targetIndex * SORT_GAP)
+      if (nextTask) {
+        const nextOrder = nextTask.sort_order ?? ((targetIndex + 2) * SORT_GAP)
+        // ターゲットと次のタスクの中間値
+        newSortOrder = (targetOrder + nextOrder) / 2
+      } else {
+        // 末尾に配置
+        newSortOrder = targetOrder + SORT_GAP
+      }
     }
 
     // 更新するフィールドを決定
@@ -418,33 +423,23 @@ export default function KaetaWBS() {
       updates.indent_level = taskDragState.previewIndent
     }
 
-    console.log('[Drop] 更新データ:', updates)
-
     // 楽観的更新
     const originalTask = { ...draggedTask }
     setTasks(prev => prev.map(t =>
       t.id === draggedTaskId ? { ...t, ...updates } : t
     ))
-    console.log('[Drop] 楽観的更新完了')
 
     // DB更新
-    console.log('[Drop] Supabase更新開始: taskId=', draggedTaskId)
-    const { error, data } = await supabase
+    const { error } = await supabase
       .from('tasks')
       .update(updates)
       .eq('id', draggedTaskId)
-      .select()
-
-    console.log('[Drop] Supabase更新結果:', { error, data })
 
     if (error) {
-      console.error('[Drop] エラー:', error.message, error.details, error.hint, error.code)
       // エラー時は元に戻す
       setTasks(prev => prev.map(t =>
         t.id === draggedTaskId ? originalTask : t
       ))
-    } else {
-      console.log('[Drop] DB更新成功')
     }
 
     setTaskDragState(resetTaskDragState())
@@ -1122,9 +1117,7 @@ export default function KaetaWBS() {
                                   }}
                                   onDragLeave={handleTaskDragLeave}
                                   onDrop={(e) => {
-                                    console.log('[onDrop] イベント発火:', task.name)
                                     const position = taskDragState.dropTarget?.position || 'after'
-                                    console.log('[onDrop] position:', position, 'dropTarget:', taskDragState.dropTarget)
                                     handleTaskDrop(e, task, position)
                                   }}
                                   onClick={() => openTaskModal('edit', task)}
@@ -1188,38 +1181,33 @@ export default function KaetaWBS() {
                                   </div>
 
                                   {/* インデント変更ポップアップ（ホバーで表示、タスクの上に重なる） */}
-                                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover/task:opacity-100 transition-opacity pointer-events-none group-hover/task:pointer-events-auto z-20">
-                                    <div className="bg-white shadow-lg rounded-lg border border-gray-200 px-2 py-1 flex items-center gap-1">
+                                  <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover/task:opacity-100 transition-all duration-150 pointer-events-none group-hover/task:pointer-events-auto z-20">
+                                    <div className="bg-white shadow-md rounded-lg border border-gray-200 p-1 flex items-center gap-0.5">
                                       <button
                                         type="button"
                                         draggable={false}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => changeIndent(e, task.id, -1)}
                                         disabled={indentLevel === 0}
-                                        className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 ${indentLevel === 0 ? 'cursor-not-allowed opacity-30' : ''}`}
-                                        title="階層を上げる（親に近づく）"
+                                        className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${indentLevel === 0 ? 'cursor-not-allowed text-gray-300' : 'text-gray-600 hover:bg-blue-100 hover:text-blue-600 active:bg-blue-200'}`}
+                                        title="階層を上げる"
                                       >
-                                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
-                                          <path d="M8 2L4 6L8 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                        </svg>
+                                        <IndentDecrease size={18} strokeWidth={2} />
                                       </button>
-                                      <span className="text-xs text-gray-500 px-1">Lv.{indentLevel}</span>
                                       <button
                                         type="button"
                                         draggable={false}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => changeIndent(e, task.id, 1)}
                                         disabled={indentLevel >= 3}
-                                        className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 ${indentLevel >= 3 ? 'cursor-not-allowed opacity-30' : ''}`}
-                                        title="階層を下げる（子に近づく）"
+                                        className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${indentLevel >= 3 ? 'cursor-not-allowed text-gray-300' : 'text-gray-600 hover:bg-blue-100 hover:text-blue-600 active:bg-blue-200'}`}
+                                        title="階層を下げる"
                                       >
-                                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
-                                          <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                                        </svg>
+                                        <IndentIncrease size={18} strokeWidth={2} />
                                       </button>
                                     </div>
                                     {/* 下向き三角（吹き出しの矢印） */}
-                                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
+                                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-white border-r border-b border-gray-200 rotate-45"></div>
                                   </div>
                                   <div className="col-span-4">
                                     <span className={`text-xs px-2 py-1 rounded border ${getOwnerColor(task.owner)}`}>
