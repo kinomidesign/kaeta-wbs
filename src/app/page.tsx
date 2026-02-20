@@ -123,6 +123,12 @@ export default function KaetaWBS() {
   // ステータスポップアップ用
   const [statusPopup, setStatusPopup] = useState<{ taskId: number; x: number; y: number } | null>(null)
 
+  // インデントポップアップ用
+  const [indentPopup, setIndentPopup] = useState<{ taskId: number; x: number; y: number; currentLevel: number } | null>(null)
+
+  // タスクの折りたたみ状態（親タスクIDをキーとして、折りたたんでいるかどうか）
+  const [collapsedTasks, setCollapsedTasks] = useState<Record<number, boolean>>({})
+
   // スクロール連動用
   const taskListRef = useRef<HTMLDivElement>(null)
   const mainScrollRef = useRef<HTMLDivElement>(null)
@@ -201,16 +207,63 @@ export default function KaetaWBS() {
     setStatusPopup(null)
   }
 
-  // インデント操作（楽観的更新でカクつき軽減）
-  const changeIndent = async (task: Task, delta: number) => {
+  // インデントポップアップを開く
+  const openIndentPopup = (task: Task, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const rect = (e.target as HTMLElement).getBoundingClientRect()
+    setIndentPopup({
+      taskId: task.id,
+      x: rect.left,
+      y: rect.bottom + 4,
+      currentLevel: task.indent_level || 0
+    })
+  }
+
+  // インデントを選択
+  const selectIndent = async (taskId: number, level: number) => {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) return
     const currentLevel = task.indent_level || 0
-    const newLevel = Math.max(0, Math.min(3, currentLevel + delta))
-    if (newLevel !== currentLevel) {
-      // 即座にUIを更新（楽観的更新）
-      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, indent_level: newLevel } : t))
-      // バックグラウンドでDB更新（updateTask関数を使用）
-      await updateTask(task.id, 'indent_level', newLevel)
+    if (level !== currentLevel) {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, indent_level: level } : t))
+      await updateTask(taskId, 'indent_level', level)
     }
+    setIndentPopup(null)
+  }
+
+  // タスクの折りたたみ/展開をトグル
+  const toggleTaskCollapse = (taskId: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setCollapsedTasks(prev => ({ ...prev, [taskId]: !prev[taskId] }))
+  }
+
+  // タスクが子タスクを持っているかチェック（同じカテゴリ内で次のタスクがより深いインデントを持つ場合）
+  const hasChildren = (task: Task, allTasksInCategory: Task[], taskIndex: number): boolean => {
+    if (taskIndex >= allTasksInCategory.length - 1) return false
+    const nextTask = allTasksInCategory[taskIndex + 1]
+    return (nextTask.indent_level || 0) > (task.indent_level || 0)
+  }
+
+  // タスクが非表示かどうかをチェック（親が折りたたまれている場合）
+  const isTaskHidden = (task: Task, allTasksInCategory: Task[], taskIndex: number): boolean => {
+    const taskLevel = task.indent_level || 0
+    if (taskLevel === 0) return false
+
+    // このタスクより前のタスクで、より浅いインデントのものを探す
+    for (let i = taskIndex - 1; i >= 0; i--) {
+      const prevTask = allTasksInCategory[i]
+      const prevLevel = prevTask.indent_level || 0
+      if (prevLevel < taskLevel) {
+        // 親が見つかった
+        if (collapsedTasks[prevTask.id]) return true
+        // さらに上の親もチェック
+        if (prevLevel > 0) continue
+        break
+      }
+    }
+    return false
   }
 
   // タスクリストのドラッグアンドドロップハンドラー
@@ -786,7 +839,7 @@ export default function KaetaWBS() {
         ref={mainScrollRef}
         className="flex overflow-auto"
         style={{ height: 'calc(100vh - 140px)' }}
-        onClick={() => setStatusPopup(null)}
+        onClick={() => { setStatusPopup(null); setIndentPopup(null); }}
       >
         {/* Task List (Left) */}
         <div ref={taskListRef} className="w-[450px] flex-shrink-0 bg-dashboard-card border-r border-dashboard-border">
@@ -901,12 +954,17 @@ export default function KaetaWBS() {
 
                       {isCategoryExpanded(phase, category) && (
                         <>
-                          {categoryTasks.map((task) => {
+                          {categoryTasks.map((task, taskIndex) => {
                             const isDragging = taskDragState.draggingTaskId === task.id
                             const isDropTargetBefore = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'before'
                             const isDropTargetAfter = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'after'
                             const isDropTargetChild = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'child'
                             const indentLevel = task.indent_level || 0
+                            const taskHasChildren = hasChildren(task, categoryTasks, taskIndex)
+                            const isHidden = isTaskHidden(task, categoryTasks, taskIndex)
+                            const isCollapsed = collapsedTasks[task.id]
+
+                            if (isHidden) return null
 
                             return (
                               <div key={task.id} className="relative">
@@ -928,7 +986,6 @@ export default function KaetaWBS() {
                                     const rect = e.currentTarget.getBoundingClientRect()
                                     const y = e.clientY - rect.top
                                     const height = rect.height
-                                    // 上部20%: before, 下部20%: after, 中央: child
                                     if (y < height * 0.25) {
                                       handleTaskDragOver(e, task, 'before')
                                     } else if (y > height * 0.75) {
@@ -960,7 +1017,6 @@ export default function KaetaWBS() {
                                           style={{ left: `${16 + i * 24 + 8}px` }}
                                         />
                                       ))}
-                                      {/* 横線（接続線） */}
                                       <div
                                         className="absolute h-px bg-gray-200 group-hover/task:bg-gray-300"
                                         style={{
@@ -973,40 +1029,42 @@ export default function KaetaWBS() {
                                   )}
 
                                   <div className="col-span-5 flex items-center gap-2">
-                                    {/* ドラッグハンドル - ホバー時のみ表示 */}
-                                    <div className="flex items-center gap-1 opacity-0 group-hover/task:opacity-100 transition-opacity">
-                                      <span className="cursor-grab text-dashboard-text-muted hover:text-dashboard-text-main" title="ドラッグして移動">
-                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-                                          <circle cx="3" cy="3" r="1.5"/>
-                                          <circle cx="9" cy="3" r="1.5"/>
-                                          <circle cx="3" cy="9" r="1.5"/>
-                                          <circle cx="9" cy="9" r="1.5"/>
-                                        </svg>
-                                      </span>
+                                    {/* トグルボタン（子タスクがある場合）またはドラッグハンドル */}
+                                    <div className="flex items-center gap-1">
+                                      {taskHasChildren ? (
+                                        <button
+                                          type="button"
+                                          draggable={false}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          onClick={(e) => toggleTaskCollapse(task.id, e)}
+                                          className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
+                                          title={isCollapsed ? '子タスクを展開' : '子タスクを折りたたむ'}
+                                        >
+                                          <span className={`transform transition-transform text-xs ${isCollapsed ? '' : 'rotate-90'}`}>▶</span>
+                                        </button>
+                                      ) : (
+                                        <span className="w-5 h-5 flex items-center justify-center cursor-grab text-dashboard-text-muted opacity-0 group-hover/task:opacity-100 transition-opacity" title="ドラッグして移動">
+                                          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                                            <circle cx="3" cy="3" r="1.5"/>
+                                            <circle cx="9" cy="3" r="1.5"/>
+                                            <circle cx="3" cy="9" r="1.5"/>
+                                            <circle cx="9" cy="9" r="1.5"/>
+                                          </svg>
+                                        </span>
+                                      )}
+                                      {/* インデントボタン - クリックでポップアップ */}
                                       <button
                                         type="button"
                                         draggable={false}
-                                        onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); changeIndent(task, -1); }}
-                                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
-                                        title="インデント減"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => openIndentPopup(task, e)}
+                                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted opacity-0 group-hover/task:opacity-100 transition-opacity"
+                                        title="階層を変更"
                                       >
                                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                          <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                          <line x1="2" y1="7" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                          <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                        </svg>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        draggable={false}
-                                        onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); changeIndent(task, 1); }}
-                                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
-                                        title="インデント増"
-                                      >
-                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                          <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                          <line x1="6" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                          <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                          <line x1="2" y1="3" x2="12" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                          <line x1="4" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                          <line x1="6" y1="11" x2="12" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                                         </svg>
                                       </button>
                                     </div>
@@ -1121,9 +1179,12 @@ export default function KaetaWBS() {
 
                       {isCategoryExpanded(phase, category) && (
                         <>
-                          {categoryTasks.map(task => {
+                          {categoryTasks.map((task, taskIndex) => {
                             const startOffset = getDaysFromStart(task.start_date, viewStartDate)
                             const duration = getDaysBetween(task.start_date, task.end_date)
+                            const isHidden = isTaskHidden(task, categoryTasks, taskIndex)
+
+                            if (isHidden) return null
 
                             return (
                               <div
@@ -1215,6 +1276,34 @@ export default function KaetaWBS() {
                 }`}></span>
                 {status}
                 {isSelected && <span className="ml-auto text-accent-blue">✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Indent Popup */}
+      {indentPopup && (
+        <div
+          className="fixed z-50 bg-dashboard-card rounded-lg shadow-lg border border-dashboard-border py-2 px-3 min-w-[160px]"
+          style={{ left: indentPopup.x, top: indentPopup.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="text-xs text-dashboard-text-muted mb-2">階層レベルを選択</div>
+          {[0, 1, 2, 3].map(level => {
+            const isSelected = indentPopup.currentLevel === level
+            return (
+              <button
+                key={level}
+                onClick={() => selectIndent(indentPopup.taskId, level)}
+                className={`w-full px-2 py-1.5 text-left text-sm hover:bg-gray-50 rounded flex items-center gap-2 ${
+                  isSelected ? 'bg-accent-blue/20' : ''
+                }`}
+              >
+                <span className="flex items-center" style={{ paddingLeft: `${level * 12}px` }}>
+                  {level === 0 ? '親タスク' : `${'└'.repeat(1)} レベル ${level}`}
+                </span>
+                {isSelected && <span className="ml-auto text-accent-blue-text">✓</span>}
               </button>
             )
           })}
