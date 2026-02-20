@@ -253,7 +253,8 @@ export default function KaetaWBS() {
     e.preventDefault()
     e.stopPropagation()
 
-    const draggedTaskId = parseInt(e.dataTransfer.getData('text/plain'))
+    // stateから直接取得（dataTransferは信頼性が低い場合がある）
+    const draggedTaskId = taskDragState.draggingTaskId
     if (!draggedTaskId || draggedTaskId === targetTask.id) {
       setTaskDragState({ draggingTaskId: null, dropTarget: null })
       return
@@ -807,7 +808,7 @@ export default function KaetaWBS() {
                 }}
                 onDrop={async (e) => {
                   e.preventDefault()
-                  const draggedTaskId = parseInt(e.dataTransfer.getData('text/plain'))
+                  const draggedTaskId = taskDragState.draggingTaskId
                   if (!draggedTaskId) return
                   const draggedTask = tasks.find(t => t.id === draggedTaskId)
                   if (!draggedTask) return
@@ -855,7 +856,7 @@ export default function KaetaWBS() {
                         }}
                         onDrop={async (e) => {
                           e.preventDefault()
-                          const draggedTaskId = parseInt(e.dataTransfer.getData('text/plain'))
+                          const draggedTaskId = taskDragState.draggingTaskId
                           if (!draggedTaskId) return
                           const draggedTask = tasks.find(t => t.id === draggedTaskId)
                           if (!draggedTask) return
@@ -969,7 +970,10 @@ export default function KaetaWBS() {
                                         </svg>
                                       </span>
                                       <button
-                                        onClick={(e) => changeIndent(task, -1, e)}
+                                        type="button"
+                                        draggable={false}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => { e.preventDefault(); changeIndent(task, -1, e); }}
                                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
                                         title="インデント減"
                                       >
@@ -980,7 +984,10 @@ export default function KaetaWBS() {
                                         </svg>
                                       </button>
                                       <button
-                                        onClick={(e) => changeIndent(task, 1, e)}
+                                        type="button"
+                                        draggable={false}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => { e.preventDefault(); changeIndent(task, 1, e); }}
                                         className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
                                         title="インデント増"
                                       >
@@ -1003,7 +1010,10 @@ export default function KaetaWBS() {
                                   </div>
                                   <div className="col-span-3">
                                     <button
-                                      onClick={(e) => openStatusPopup(task, e)}
+                                      type="button"
+                                      draggable={false}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => { e.stopPropagation(); openStatusPopup(task, e); }}
                                       className={`text-xs px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(task.status)}`}
                                       title="クリックでステータス変更"
                                     >
