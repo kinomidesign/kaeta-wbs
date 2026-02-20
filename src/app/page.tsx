@@ -53,7 +53,11 @@ export default function KaetaWBS() {
   const [showTaskModal, setShowTaskModal] = useState(false)
   const [taskModalMode, setTaskModalMode] = useState<'add' | 'edit'>('add')
   const [showPhaseModal, setShowPhaseModal] = useState(false)
-  const [viewStartDate, setViewStartDate] = useState('2026-02-24')
+  const [viewStartDate, setViewStartDate] = useState(() => {
+    // デフォルトは今日の日付
+    const today = new Date()
+    return today.toISOString().split('T')[0]
+  })
   const [filterPhase, setFilterPhase] = useState('all')
   const [filterOwner, setFilterOwner] = useState('all')
   const [saving, setSaving] = useState(false)
@@ -946,6 +950,13 @@ export default function KaetaWBS() {
               onChange={(e) => setViewStartDate(e.target.value)}
               className="border border-dashboard-border rounded-md px-2 py-1 text-sm"
             />
+            <button
+              onClick={() => setViewStartDate(new Date().toISOString().split('T')[0])}
+              className="px-3 py-1 text-sm rounded-md border border-dashboard-border hover:bg-gray-50 transition-colors"
+              style={{ color: '#009EA4' }}
+            >
+              今日
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-dashboard-text-muted">フェーズ:</span>
@@ -1052,7 +1063,7 @@ export default function KaetaWBS() {
                   setTaskDragState(resetTaskDragState())
                   lastDropTargetRef.current = null
                 }}
-                className={`bg-gray-100 text-dashboard-text-main px-4 py-3 text-sm font-semibold sticky top-8 z-10 cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border transition-all
+                className={`bg-gray-100 text-dashboard-text-main px-4 py-3 text-sm font-semibold cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border transition-all
                   ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === '' && taskDragState.dropTarget?.taskId === null ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/20' : ''}
                 `}
               >
