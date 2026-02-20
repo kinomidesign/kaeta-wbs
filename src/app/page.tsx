@@ -444,10 +444,7 @@ export default function KaetaWBS() {
         t.id === draggedTaskId ? originalTask : t
       ))
     } else {
-      console.log('[Drop] DB更新成功 - 返されたデータ:', data)
-      // 成功時はDBから最新データを再取得して確実に反映
-      await fetchTasks()
-      console.log('[Drop] タスク再取得完了')
+      console.log('[Drop] DB更新成功')
     }
 
     setTaskDragState(resetTaskDragState())
@@ -1188,35 +1185,41 @@ export default function KaetaWBS() {
                                       <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
                                       <p className="text-xs text-dashboard-text-muted">{task.start_date} 〜 {task.end_date}</p>
                                     </div>
-                                    {/* インデント変更ボタン（ホバーで表示） */}
-                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity">
+                                  </div>
+
+                                  {/* インデント変更ポップアップ（ホバーで表示、タスクの上に重なる） */}
+                                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover/task:opacity-100 transition-opacity pointer-events-none group-hover/task:pointer-events-auto z-20">
+                                    <div className="bg-white shadow-lg rounded-lg border border-gray-200 px-2 py-1 flex items-center gap-1">
                                       <button
                                         type="button"
                                         draggable={false}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => changeIndent(e, task.id, -1)}
                                         disabled={indentLevel === 0}
-                                        className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted ${indentLevel === 0 ? 'cursor-not-allowed opacity-30' : ''}`}
-                                        title="階層を上げる"
+                                        className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 ${indentLevel === 0 ? 'cursor-not-allowed opacity-30' : ''}`}
+                                        title="階層を上げる（親に近づく）"
                                       >
-                                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
                                           <path d="M8 2L4 6L8 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                         </svg>
                                       </button>
+                                      <span className="text-xs text-gray-500 px-1">Lv.{indentLevel}</span>
                                       <button
                                         type="button"
                                         draggable={false}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => changeIndent(e, task.id, 1)}
                                         disabled={indentLevel >= 3}
-                                        className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted ${indentLevel >= 3 ? 'cursor-not-allowed opacity-30' : ''}`}
-                                        title="階層を下げる"
+                                        className={`w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 text-gray-600 ${indentLevel >= 3 ? 'cursor-not-allowed opacity-30' : ''}`}
+                                        title="階層を下げる（子に近づく）"
                                       >
-                                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
                                           <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                         </svg>
                                       </button>
                                     </div>
+                                    {/* 下向き三角（吹き出しの矢印） */}
+                                    <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-2 h-2 bg-white border-r border-b border-gray-200 rotate-45"></div>
                                   </div>
                                   <div className="col-span-4">
                                     <span className={`text-xs px-2 py-1 rounded border ${getOwnerColor(task.owner)}`}>
