@@ -26,8 +26,8 @@ module.exports = {
         },
         // ガントバー用のアクセントカラー（役割別）
         accent: {
-          blue: '#3B82F6',       // エンジニア用
-          pink: '#EC4899',       // デザイナー用
+          blue: '#D5F0EF',       // エンジニア用
+          pink: '#FFE5E4',       // デザイナー用
         }
       },
       borderRadius: {

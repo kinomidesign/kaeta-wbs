@@ -107,6 +107,13 @@ export default function KaetaWBS() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [showDatePicker, setShowDatePicker] = useState(false)
 
+  // ステータスポップアップ用
+  const [statusPopup, setStatusPopup] = useState<{ taskId: number; x: number; y: number } | null>(null)
+
+  // スクロール連動用
+  const taskListRef = useRef<HTMLDivElement>(null)
+  const mainScrollRef = useRef<HTMLDivElement>(null)
+
   // データ取得
   useEffect(() => {
     fetchTasks()
@@ -164,12 +171,21 @@ export default function KaetaWBS() {
     setSaving(false)
   }
 
-  // ステータストグル
-  const toggleStatus = async (task: Task, e: React.MouseEvent) => {
+  // ステータスポップアップを開く
+  const openStatusPopup = (task: Task, e: React.MouseEvent) => {
     e.stopPropagation()
-    const currentIndex = statuses.indexOf(task.status)
-    const nextIndex = (currentIndex + 1) % statuses.length
-    await updateTask(task.id, 'status', statuses[nextIndex])
+    const rect = (e.target as HTMLElement).getBoundingClientRect()
+    setStatusPopup({
+      taskId: task.id,
+      x: rect.left,
+      y: rect.bottom + 4
+    })
+  }
+
+  // ステータスを選択
+  const selectStatus = async (taskId: number, status: string) => {
+    await updateTask(taskId, 'status', status)
+    setStatusPopup(null)
   }
 
   // インデント操作
@@ -657,14 +673,18 @@ export default function KaetaWBS() {
       </div>
 
       {/* Main Content */}
-      <div className="flex overflow-hidden" style={{ height: 'calc(100vh - 140px)' }}>
+      <div
+        ref={mainScrollRef}
+        className="flex overflow-auto"
+        style={{ height: 'calc(100vh - 140px)' }}
+        onClick={() => setStatusPopup(null)}
+      >
         {/* Task List (Left) */}
-        <div className="w-[450px] flex-shrink-0 bg-dashboard-card border-r border-dashboard-border overflow-y-auto">
-          <div className="sticky top-0 bg-gray-50 border-b border-dashboard-border px-4 py-2 text-xs font-medium text-dashboard-text-muted grid grid-cols-12 gap-2">
+        <div ref={taskListRef} className="w-[450px] flex-shrink-0 bg-dashboard-card border-r border-dashboard-border">
+          <div className="sticky top-0 bg-gray-50 border-b border-dashboard-border px-4 py-2 text-xs font-medium text-dashboard-text-muted grid grid-cols-12 gap-2 z-20">
             <div className="col-span-5">タスク名</div>
-            <div className="col-span-3">担当</div>
-            <div className="col-span-2">状態</div>
-            <div className="col-span-2">操作</div>
+            <div className="col-span-4">担当</div>
+            <div className="col-span-3">状態</div>
           </div>
 
           {Object.entries(groupedByPhase).map(([phase, categories]) => (
@@ -707,41 +727,52 @@ export default function KaetaWBS() {
                             <div
                               key={task.id}
                               onClick={() => openTaskModal('edit', task)}
-                              className={`px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 grid grid-cols-12 gap-2 items-center ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}`}
+                              className={`group/task px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 grid grid-cols-12 gap-2 items-center ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}`}
                               style={{ paddingLeft: `${16 + (task.indent_level || 0) * 16}px` }}
                             >
-                              <div className="col-span-5">
-                                <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
-                                <p className="text-xs text-dashboard-text-muted">{task.start_date} 〜 {task.end_date}</p>
+                              <div className="col-span-5 flex items-center gap-2">
+                                {/* インデントボタン - ホバー時のみ表示 */}
+                                <div className="flex gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={(e) => changeIndent(task, -1, e)}
+                                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
+                                    title="インデント減"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                      <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                      <line x1="2" y1="7" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                      <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={(e) => changeIndent(task, 1, e)}
+                                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
+                                    title="インデント増"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                      <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                      <line x1="6" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                      <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                    </svg>
+                                  </button>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
+                                  <p className="text-xs text-dashboard-text-muted">{task.start_date} 〜 {task.end_date}</p>
+                                </div>
                               </div>
-                              <div className="col-span-3">
+                              <div className="col-span-4">
                                 <span className={`text-xs px-2 py-1 rounded border ${getOwnerColor(task.owner)}`}>
                                   {task.owner}
                                 </span>
                               </div>
-                              <div className="col-span-2">
+                              <div className="col-span-3">
                                 <button
-                                  onClick={(e) => toggleStatus(task, e)}
+                                  onClick={(e) => openStatusPopup(task, e)}
                                   className={`text-xs px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(task.status)}`}
                                   title="クリックでステータス変更"
                                 >
                                   {task.status}
-                                </button>
-                              </div>
-                              <div className="col-span-2 flex gap-1">
-                                <button
-                                  onClick={(e) => changeIndent(task, -1, e)}
-                                  className="text-xs px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 text-dashboard-text-muted"
-                                  title="インデント減"
-                                >
-                                  ←
-                                </button>
-                                <button
-                                  onClick={(e) => changeIndent(task, 1, e)}
-                                  className="text-xs px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 text-dashboard-text-muted"
-                                  title="インデント増"
-                                >
-                                  →
                                 </button>
                               </div>
                             </div>
@@ -777,7 +808,7 @@ export default function KaetaWBS() {
         {/* Gantt Chart (Right) */}
         <div
           ref={ganttRef}
-          className="flex-1 overflow-x-auto overflow-y-auto"
+          className="flex-1 min-w-0"
           onMouseMove={handleDragMove}
           onMouseUp={handleDragEnd}
           onMouseLeave={handleDragEnd}
@@ -890,6 +921,38 @@ export default function KaetaWBS() {
           ))}
         </div>
       </div>
+
+      {/* Status Popup */}
+      {statusPopup && (
+        <div
+          className="fixed z-50 bg-dashboard-card rounded-lg shadow-lg border border-dashboard-border py-1 min-w-[120px]"
+          style={{ left: statusPopup.x, top: statusPopup.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {statuses.map(status => {
+            const task = tasks.find(t => t.id === statusPopup.taskId)
+            const isSelected = task?.status === status
+            return (
+              <button
+                key={status}
+                onClick={() => selectStatus(statusPopup.taskId, status)}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 ${
+                  isSelected ? 'bg-gray-50' : ''
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${
+                  status === '未着手' ? 'bg-gray-400' :
+                  status === '進行中' ? 'bg-blue-500' :
+                  status === '完了' ? 'bg-green-500' :
+                  'bg-yellow-500'
+                }`}></span>
+                {status}
+                {isSelected && <span className="ml-auto text-accent-blue">✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Task Modal (統一された追加/編集モーダル) */}
       {showTaskModal && (
