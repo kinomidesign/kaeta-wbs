@@ -444,7 +444,10 @@ export default function KaetaWBS() {
         t.id === draggedTaskId ? originalTask : t
       ))
     } else {
-      console.log('[Drop] DB更新成功')
+      console.log('[Drop] DB更新成功 - 返されたデータ:', data)
+      // 成功時はDBから最新データを再取得して確実に反映
+      await fetchTasks()
+      console.log('[Drop] タスク再取得完了')
     }
 
     setTaskDragState(resetTaskDragState())
@@ -1180,38 +1183,39 @@ export default function KaetaWBS() {
                                           </svg>
                                         </span>
                                       )}
-                                      {/* インデント減少ボタン（左矢印） */}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
+                                      <p className="text-xs text-dashboard-text-muted">{task.start_date} 〜 {task.end_date}</p>
+                                    </div>
+                                    {/* インデント変更ボタン（ホバーで表示） */}
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity">
                                       <button
                                         type="button"
                                         draggable={false}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => changeIndent(e, task.id, -1)}
                                         disabled={indentLevel === 0}
-                                        className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted opacity-0 group-hover/task:opacity-100 transition-opacity ${indentLevel === 0 ? 'cursor-not-allowed opacity-30' : ''}`}
-                                        title="階層を上げる（親に近づく）"
+                                        className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted ${indentLevel === 0 ? 'cursor-not-allowed opacity-30' : ''}`}
+                                        title="階層を上げる"
                                       >
-                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                           <path d="M8 2L4 6L8 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                         </svg>
                                       </button>
-                                      {/* インデント増加ボタン（右矢印） */}
                                       <button
                                         type="button"
                                         draggable={false}
                                         onMouseDown={(e) => e.stopPropagation()}
                                         onClick={(e) => changeIndent(e, task.id, 1)}
                                         disabled={indentLevel >= 3}
-                                        className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted opacity-0 group-hover/task:opacity-100 transition-opacity ${indentLevel >= 3 ? 'cursor-not-allowed opacity-30' : ''}`}
-                                        title="階層を下げる（子に近づく）"
+                                        className={`w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted ${indentLevel >= 3 ? 'cursor-not-allowed opacity-30' : ''}`}
+                                        title="階層を下げる"
                                       >
-                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
                                           <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                                         </svg>
                                       </button>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
-                                      <p className="text-xs text-dashboard-text-muted">{task.start_date} 〜 {task.end_date}</p>
                                     </div>
                                   </div>
                                   <div className="col-span-4">
