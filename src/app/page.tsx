@@ -25,6 +25,7 @@ interface Task {
   priority: string
   note: string | null
   indent_level?: number
+  sort_order?: number
 }
 
 interface Phase {
@@ -91,13 +92,16 @@ export default function KaetaWBS() {
   // タスクリストドラッグ＆ドロップ関連の状態
   const [taskDragState, setTaskDragState] = useState<{
     draggingTaskId: number | null
+    startX: number
+    previewIndent: number
+    originalIndent: number
     dropTarget: {
       taskId: number | null
       position: 'before' | 'after' | 'child' | null
       phase?: string
       category?: string
     } | null
-  }>({ draggingTaskId: null, dropTarget: null })
+  }>({ draggingTaskId: null, startX: 0, previewIndent: 0, originalIndent: 0, dropTarget: null })
   // ドラッグオーバーのスロットリング用
   const lastDropTargetRef = useRef<string | null>(null)
 
@@ -266,11 +270,27 @@ export default function KaetaWBS() {
     return false
   }
 
+  // 初期状態にリセット
+  const resetTaskDragState = () => ({
+    draggingTaskId: null,
+    startX: 0,
+    previewIndent: 0,
+    originalIndent: 0,
+    dropTarget: null
+  })
+
   // タスクリストのドラッグアンドドロップハンドラー
   const handleTaskDragStart = (e: React.DragEvent, task: Task) => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', task.id.toString())
-    setTaskDragState({ draggingTaskId: task.id, dropTarget: null })
+    const indent = task.indent_level || 0
+    setTaskDragState({
+      draggingTaskId: task.id,
+      startX: e.clientX,
+      previewIndent: indent,
+      originalIndent: indent,
+      dropTarget: null
+    })
   }
 
   const handleTaskDragOver = (e: React.DragEvent, targetTask: Task, position: 'before' | 'after' | 'child') => {
@@ -278,13 +298,19 @@ export default function KaetaWBS() {
     e.stopPropagation()
     if (taskDragState.draggingTaskId === targetTask.id) return
 
-    // スロットリング: 同じターゲットなら更新しない
-    const targetKey = `${targetTask.id}-${position}`
+    // X座標の変化に基づいてインデントレベルを計算（24pxごとに1レベル）
+    const deltaX = e.clientX - taskDragState.startX
+    const indentDelta = Math.round(deltaX / 40) // 40pxごとに1レベル変更
+    const newIndent = Math.max(0, Math.min(3, taskDragState.originalIndent + indentDelta))
+
+    // スロットリング: 同じターゲットかつ同じインデントなら更新しない
+    const targetKey = `${targetTask.id}-${position}-${newIndent}`
     if (lastDropTargetRef.current === targetKey) return
     lastDropTargetRef.current = targetKey
 
     setTaskDragState(prev => ({
       ...prev,
+      previewIndent: newIndent,
       dropTarget: {
         taskId: targetTask.id,
         position,
@@ -307,28 +333,54 @@ export default function KaetaWBS() {
     // stateから直接取得（dataTransferは信頼性が低い場合がある）
     const draggedTaskId = taskDragState.draggingTaskId
     if (!draggedTaskId || draggedTaskId === targetTask.id) {
-      setTaskDragState({ draggingTaskId: null, dropTarget: null })
+      setTaskDragState(resetTaskDragState())
       return
     }
 
     const draggedTask = tasks.find(t => t.id === draggedTaskId)
     if (!draggedTask) {
-      setTaskDragState({ draggingTaskId: null, dropTarget: null })
+      setTaskDragState(resetTaskDragState())
       return
+    }
+
+    // 同じカテゴリ内のタスクを取得してソート
+    const sameCategoryTasks = tasks
+      .filter(t => t.phase === targetTask.phase && t.category === targetTask.category && t.id !== draggedTaskId)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+
+    // ターゲットのインデックスを取得
+    const targetIndex = sameCategoryTasks.findIndex(t => t.id === targetTask.id)
+
+    // 新しいsort_orderを計算
+    let newSortOrder: number
+    if (position === 'before') {
+      const prevTask = sameCategoryTasks[targetIndex - 1]
+      const prevOrder = prevTask?.sort_order ?? 0
+      const targetOrder = targetTask.sort_order ?? 0
+      newSortOrder = prevTask ? (prevOrder + targetOrder) / 2 : targetOrder - 1
+    } else {
+      // after または child
+      const nextTask = sameCategoryTasks[targetIndex + 1]
+      const targetOrder = targetTask.sort_order ?? 0
+      const nextOrder = nextTask?.sort_order ?? (targetOrder + 2)
+      newSortOrder = (targetOrder + nextOrder) / 2
     }
 
     // 更新するフィールドを決定
     const updates: Partial<Task> = {
       phase: targetTask.phase,
-      category: targetTask.category
+      category: targetTask.category,
+      sort_order: newSortOrder
     }
 
+    // インデントレベルを設定
     // childの場合、ターゲットのインデント+1にする
+    // before/afterの場合、ドラッグ中の左右移動で設定されたpreviewIndentを使用
     if (position === 'child') {
       updates.indent_level = Math.min((targetTask.indent_level || 0) + 1, 3)
     } else {
-      // before/afterの場合、同じインデントレベル
-      updates.indent_level = targetTask.indent_level || 0
+      // ドラッグ中に左右移動で設定されたインデントを使用
+      updates.indent_level = taskDragState.previewIndent
     }
 
     // 楽観的更新
@@ -337,7 +389,7 @@ export default function KaetaWBS() {
       t.id === draggedTaskId ? { ...t, ...updates } : t
     ))
 
-    // DB更新（updated_atは省略 - DBのトリガーで自動更新される場合がある）
+    // DB更新
     const { error } = await supabase
       .from('tasks')
       .update(updates)
@@ -351,12 +403,12 @@ export default function KaetaWBS() {
       ))
     }
 
-    setTaskDragState({ draggingTaskId: null, dropTarget: null })
+    setTaskDragState(resetTaskDragState())
     lastDropTargetRef.current = null
   }
 
   const handleTaskDragEnd = () => {
-    setTaskDragState({ draggingTaskId: null, dropTarget: null })
+    setTaskDragState(resetTaskDragState())
     lastDropTargetRef.current = null
   }
 
@@ -364,12 +416,21 @@ export default function KaetaWBS() {
   const addTask = async () => {
     if (!editingTask.name || !editingTask.start_date || !editingTask.end_date) return
 
+    // 同じカテゴリ内の最大sort_orderを取得
+    const sameCategoryTasks = tasks.filter(
+      t => t.phase === editingTask.phase && t.category === editingTask.category
+    )
+    const maxSortOrder = sameCategoryTasks.length > 0
+      ? Math.max(...sameCategoryTasks.map(t => t.sort_order ?? 0))
+      : 0
+
     setSaving(true)
     const { data, error } = await supabase
       .from('tasks')
       .insert([{
         ...editingTask,
-        indent_level: editingTask.indent_level || 0
+        indent_level: editingTask.indent_level || 0,
+        sort_order: maxSortOrder + 1
       }])
       .select()
 
@@ -739,6 +800,13 @@ export default function KaetaWBS() {
       result[task.phase][task.category].push(task)
     })
 
+    // 各カテゴリ内でsort_orderでソート
+    Object.values(result).forEach(categories => {
+      Object.values(categories).forEach(taskList => {
+        taskList.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      })
+    })
+
     return result
   }, [filteredTasks, phases])
 
@@ -870,8 +938,12 @@ export default function KaetaWBS() {
                   const draggedTask = tasks.find(t => t.id === draggedTaskId)
                   if (!draggedTask) return
 
-                  // カテゴリなしでフェーズに移動
-                  const updates = { phase, category: '', indent_level: 0 }
+                  // カテゴリなしでフェーズに移動（先頭に配置）
+                  const samePhaseTasks = tasks.filter(t => t.phase === phase && t.category === '')
+                  const minSortOrder = samePhaseTasks.length > 0
+                    ? Math.min(...samePhaseTasks.map(t => t.sort_order ?? 0))
+                    : 0
+                  const updates = { phase, category: '', indent_level: 0, sort_order: minSortOrder - 1 }
                   const originalTask = { ...draggedTask }
                   setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, ...updates } : t))
 
@@ -884,7 +956,7 @@ export default function KaetaWBS() {
                     console.error('Error moving to phase:', error.message)
                     setTasks(prev => prev.map(t => t.id === draggedTaskId ? originalTask : t))
                   }
-                  setTaskDragState({ draggingTaskId: null, dropTarget: null })
+                  setTaskDragState(resetTaskDragState())
                   lastDropTargetRef.current = null
                 }}
                 className={`bg-gray-100 text-dashboard-text-main px-4 py-3 text-sm font-semibold sticky top-8 z-10 cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border transition-all
@@ -923,7 +995,12 @@ export default function KaetaWBS() {
                           const draggedTask = tasks.find(t => t.id === draggedTaskId)
                           if (!draggedTask) return
 
-                          const updates = { phase, category, indent_level: 0 }
+                          // カテゴリの先頭に配置
+                          const sameCategoryTasks = tasks.filter(t => t.phase === phase && t.category === category)
+                          const minSortOrder = sameCategoryTasks.length > 0
+                            ? Math.min(...sameCategoryTasks.map(t => t.sort_order ?? 0))
+                            : 0
+                          const updates = { phase, category, indent_level: 0, sort_order: minSortOrder - 1 }
                           const originalTask = { ...draggedTask }
                           setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, ...updates } : t))
 
@@ -936,7 +1013,7 @@ export default function KaetaWBS() {
                             console.error('Error moving to category:', error.message)
                             setTasks(prev => prev.map(t => t.id === draggedTaskId ? originalTask : t))
                           }
-                          setTaskDragState({ draggingTaskId: null, dropTarget: null })
+                          setTaskDragState(resetTaskDragState())
                           lastDropTargetRef.current = null
                         }}
                         className={`bg-gray-50 text-dashboard-text-main px-4 py-2 pl-8 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-between border-b border-dashboard-border transition-all
@@ -966,13 +1043,18 @@ export default function KaetaWBS() {
 
                             if (isHidden) return null
 
+                            // ドロップインジケーターの位置はプレビューインデントを使用
+                            const indicatorIndent = isDropTargetBefore || isDropTargetAfter
+                              ? taskDragState.previewIndent
+                              : indentLevel
+
                             return (
                               <div key={task.id} className="relative">
                                 {/* ドロップインジケーター（上） */}
                                 {isDropTargetBefore && (
                                   <div
                                     className="absolute top-0 left-0 right-0 h-1 bg-accent-blue z-10"
-                                    style={{ marginLeft: `${16 + indentLevel * 24}px` }}
+                                    style={{ marginLeft: `${16 + indicatorIndent * 24}px` }}
                                   />
                                 )}
 
@@ -1096,7 +1178,7 @@ export default function KaetaWBS() {
                                 {isDropTargetAfter && (
                                   <div
                                     className="absolute bottom-0 left-0 right-0 h-1 bg-accent-blue z-10"
-                                    style={{ marginLeft: `${16 + indentLevel * 24}px` }}
+                                    style={{ marginLeft: `${16 + indicatorIndent * 24}px` }}
                                   />
                                 )}
                               </div>
