@@ -376,6 +376,7 @@ export default function KaetaWBS() {
       setTaskDragState(resetTaskDragState())
       return
     }
+
     // 移動先カテゴリ内のタスクを取得してソート（ドラッグ中のタスクを除外）
     const sameCategoryTasks = tasks
       .filter(t => t.phase === targetTask.phase && t.category === targetTask.category && t.id !== draggedTaskId)
@@ -383,51 +384,33 @@ export default function KaetaWBS() {
 
     // ターゲットのインデックスを取得
     const targetIndex = sameCategoryTasks.findIndex(t => t.id === targetTask.id)
+    const targetOrder = targetTask.sort_order ?? 0
 
-    // 新しいsort_orderを計算（より堅牢なロジック）
+    // 新しいsort_orderを計算（シンプルなロジック）
     let newSortOrder: number
-    const SORT_GAP = 1000 // タスク間の基本間隔
 
-    if (position === 'before') {
-      const prevTask = sameCategoryTasks[targetIndex - 1]
-      const targetOrder = targetTask.sort_order ?? (targetIndex * SORT_GAP)
-      if (prevTask) {
-        const prevOrder = prevTask.sort_order ?? ((targetIndex - 1) * SORT_GAP)
-        // 前のタスクとターゲットの中間値
-        newSortOrder = (prevOrder + targetOrder) / 2
-      } else {
-        // 先頭に配置
-        newSortOrder = targetOrder - SORT_GAP
-      }
+    // before: ターゲットの前に配置
+    // after/child: ターゲットの後に配置
+    const insertBefore = position === 'before'
+
+    if (insertBefore) {
+      // ターゲットの前に挿入
+      const prevTask = targetIndex > 0 ? sameCategoryTasks[targetIndex - 1] : null
+      const prevOrder = prevTask?.sort_order ?? (targetOrder - 1000)
+      newSortOrder = (prevOrder + targetOrder) / 2
     } else {
-      // after または child
-      const nextTask = sameCategoryTasks[targetIndex + 1]
-      const targetOrder = targetTask.sort_order ?? (targetIndex * SORT_GAP)
-      if (nextTask) {
-        const nextOrder = nextTask.sort_order ?? ((targetIndex + 2) * SORT_GAP)
-        // ターゲットと次のタスクの中間値
-        newSortOrder = (targetOrder + nextOrder) / 2
-      } else {
-        // 末尾に配置
-        newSortOrder = targetOrder + SORT_GAP
-      }
+      // ターゲットの後に挿入
+      const nextTask = targetIndex < sameCategoryTasks.length - 1 ? sameCategoryTasks[targetIndex + 1] : null
+      const nextOrder = nextTask?.sort_order ?? (targetOrder + 1000)
+      newSortOrder = (targetOrder + nextOrder) / 2
     }
 
-    // 更新するフィールドを決定
+    // 更新するフィールドを決定（phase, category, sort_order のみ）
+    // インデントは変更しない（ホバーポップアップで変更可能）
     const updates: Partial<Task> = {
       phase: targetTask.phase,
       category: targetTask.category,
       sort_order: newSortOrder
-    }
-
-    // インデントレベルを設定
-    // childの場合、ターゲットのインデント+1にする
-    // before/afterの場合、ドラッグ中の左右移動で設定されたpreviewIndentを使用
-    if (position === 'child') {
-      updates.indent_level = Math.min((targetTask.indent_level || 0) + 1, 3)
-    } else {
-      // ドラッグ中に左右移動で設定されたインデントを使用
-      updates.indent_level = taskDragState.previewIndent
     }
 
     // 楽観的更新
@@ -1084,7 +1067,6 @@ export default function KaetaWBS() {
                             const isDragging = taskDragState.draggingTaskId === task.id
                             const isDropTargetBefore = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'before'
                             const isDropTargetAfter = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'after'
-                            const isDropTargetChild = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'child'
                             const indentLevel = task.indent_level || 0
                             const taskHasChildren = hasChildren(task, categoryTasks, taskIndex)
                             const isHidden = isTaskHidden(task, categoryTasks, taskIndex)
@@ -1092,18 +1074,13 @@ export default function KaetaWBS() {
 
                             if (isHidden) return null
 
-                            // ドロップインジケーターの位置はプレビューインデントを使用
-                            const indicatorIndent = isDropTargetBefore || isDropTargetAfter
-                              ? taskDragState.previewIndent
-                              : indentLevel
-
                             return (
                               <div key={task.id} className="relative">
                                 {/* ドロップインジケーター（上） */}
                                 {isDropTargetBefore && (
                                   <div
                                     className="absolute top-0 left-0 right-0 h-1 bg-accent-blue z-10"
-                                    style={{ marginLeft: `${16 + indicatorIndent * 24}px` }}
+                                    style={{ marginLeft: `${16 + indentLevel * 24}px` }}
                                   />
                                 )}
 
@@ -1117,13 +1094,9 @@ export default function KaetaWBS() {
                                     const rect = e.currentTarget.getBoundingClientRect()
                                     const y = e.clientY - rect.top
                                     const height = rect.height
-                                    if (y < height * 0.25) {
-                                      handleTaskDragOver(e, task, 'before')
-                                    } else if (y > height * 0.75) {
-                                      handleTaskDragOver(e, task, 'after')
-                                    } else {
-                                      handleTaskDragOver(e, task, 'child')
-                                    }
+                                    // シンプルに上半分がbefore、下半分がafter
+                                    const position = y < height * 0.5 ? 'before' : 'after'
+                                    handleTaskDragOver(e, task, position)
                                   }}
                                   onDragLeave={handleTaskDragLeave}
                                   onDrop={(e) => {
@@ -1134,7 +1107,6 @@ export default function KaetaWBS() {
                                   className={`group/task px-4 py-3 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
                                     ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}
                                     ${isDragging ? 'opacity-50 bg-gray-100' : ''}
-                                    ${isDropTargetChild ? 'bg-accent-blue/20 ring-2 ring-accent-blue ring-inset' : ''}
                                   `}
                                   style={{ paddingLeft: `${16 + indentLevel * 24}px` }}
                                 >
@@ -1242,7 +1214,7 @@ export default function KaetaWBS() {
                                 {isDropTargetAfter && (
                                   <div
                                     className="absolute bottom-0 left-0 right-0 h-1 bg-accent-blue z-10"
-                                    style={{ marginLeft: `${16 + indicatorIndent * 24}px` }}
+                                    style={{ marginLeft: `${16 + indentLevel * 24}px` }}
                                   />
                                 )}
                               </div>
