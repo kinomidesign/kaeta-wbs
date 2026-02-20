@@ -950,13 +950,6 @@ export default function KaetaWBS() {
               onChange={(e) => setViewStartDate(e.target.value)}
               className="border border-dashboard-border rounded-md px-2 py-1 text-sm"
             />
-            <button
-              onClick={() => setViewStartDate(new Date().toISOString().split('T')[0])}
-              className="px-3 py-1 text-sm rounded-md border border-dashboard-border hover:bg-gray-50 transition-colors"
-              style={{ color: '#009EA4' }}
-            >
-              今日
-            </button>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-dashboard-text-muted">フェーズ:</span>
@@ -980,6 +973,18 @@ export default function KaetaWBS() {
               {owners.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
+          <button
+            onClick={() => setViewStartDate(new Date().toISOString().split('T')[0])}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-dashboard-border hover:bg-gray-50 transition-colors"
+            style={{ color: '#009EA4' }}
+            title="チャートの先頭を今日に移動"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 4v6h-6" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            チャートの先頭を今日に移動
+          </button>
           <div className="flex gap-2 ml-auto">
             <span className="flex items-center gap-1 text-xs"><span className="w-3 h-3 rounded bg-accent-blue"></span>エンジニア</span>
             <span className="flex items-center gap-1 text-xs"><span className="w-3 h-3 rounded bg-accent-pink"></span>デザイナー</span>
@@ -991,12 +996,12 @@ export default function KaetaWBS() {
       {/* Main Content */}
       <div
         ref={mainScrollRef}
-        className={`flex overflow-auto ${isResizing ? 'cursor-col-resize select-none' : ''}`}
+        className={`flex ${isResizing ? 'cursor-col-resize select-none' : ''}`}
         style={{ height: 'calc(100vh - 140px)' }}
         onClick={() => { setStatusPopup(null); setIndentPopup(null); }}
       >
-        {/* Task List (Left) */}
-        <div ref={taskListRef} className="flex-shrink-0 bg-dashboard-card relative" style={{ width: `${tableWidth}px` }}>
+        {/* Task List (Left) - 縦スクロールのみ */}
+        <div ref={taskListRef} className="flex-shrink-0 bg-dashboard-card relative overflow-y-auto overflow-x-hidden" style={{ width: `${tableWidth}px` }}>
           {/* リサイズハンドル */}
           <div
             className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-30 group hover:bg-[#009EA4] transition-colors ${isResizing ? 'bg-[#009EA4]' : 'bg-dashboard-border'}`}
@@ -1063,7 +1068,7 @@ export default function KaetaWBS() {
                   setTaskDragState(resetTaskDragState())
                   lastDropTargetRef.current = null
                 }}
-                className={`bg-gray-100 text-dashboard-text-main px-4 py-3 text-sm font-semibold cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border transition-all
+                className={`bg-gray-100 text-dashboard-text-main px-4 h-12 text-sm font-semibold cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border transition-all
                   ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === '' && taskDragState.dropTarget?.taskId === null ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/20' : ''}
                 `}
               >
@@ -1123,7 +1128,7 @@ export default function KaetaWBS() {
                           setTaskDragState(resetTaskDragState())
                           lastDropTargetRef.current = null
                         }}
-                        className={`bg-gray-50 text-dashboard-text-main px-4 py-2 pl-8 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-between border-b border-dashboard-border transition-all
+                        className={`bg-gray-50 text-dashboard-text-main px-4 h-10 pl-8 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-between border-b border-dashboard-border transition-all
                           ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === category && taskDragState.dropTarget?.taskId === null ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/10' : ''}
                         `}
                       >
@@ -1179,7 +1184,7 @@ export default function KaetaWBS() {
                                     handleTaskDrop(e, task, position)
                                   }}
                                   onClick={() => openTaskModal('edit', task)}
-                                  className={`group/task px-4 py-3 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
+                                  className={`group/task px-4 h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
                                     ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}
                                     ${isDragging ? 'opacity-50 bg-gray-100' : ''}
                                   `}
@@ -1311,7 +1316,7 @@ export default function KaetaWBS() {
                           {/* クイック追加ボタン */}
                           <div
                             onClick={() => openTaskModal('add', undefined, phase, category)}
-                            className="px-4 py-2 pl-12 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue text-sm flex items-center gap-1"
+                            className="px-4 h-10 pl-12 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue text-sm flex items-center gap-1"
                           >
                             <span>+</span> タスクを追加
                           </div>
@@ -1324,7 +1329,7 @@ export default function KaetaWBS() {
                   {Object.keys(categories).length === 0 && (
                     <div
                       onClick={() => openTaskModal('add', undefined, phase, '')}
-                      className="px-4 py-2 pl-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue text-sm flex items-center gap-1"
+                      className="px-4 h-10 pl-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue text-sm flex items-center gap-1"
                     >
                       <span>+</span> タスクを追加
                     </div>
@@ -1335,10 +1340,10 @@ export default function KaetaWBS() {
           ))}
         </div>
 
-        {/* Gantt Chart (Right) */}
+        {/* Gantt Chart (Right) - 横スクロール可能 */}
         <div
           ref={ganttRef}
-          className="flex-1 min-w-0"
+          className="flex-1 min-w-0 overflow-x-auto overflow-y-auto"
           onMouseMove={handleDragMove}
           onMouseUp={handleDragEnd}
           onMouseLeave={handleDragEnd}
