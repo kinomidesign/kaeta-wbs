@@ -723,7 +723,7 @@ export default function KaetaWBS() {
 
   const getOwnerColor = (owner: string) => {
     switch (owner) {
-      case 'エンジニア': return 'bg-accent-blue text-accent-blue-text border-accent-blue'
+      case 'エンジニア': return 'bg-accent-blue text-accent-blue-text-text border-accent-blue'
       case 'デザイナー': return 'bg-accent-pink text-accent-pink-text border-accent-pink'
       case '共同': return 'bg-accent-purple text-accent-purple-text border-accent-purple'
       default: return 'bg-gray-100 text-dashboard-text-muted border-gray-200'
@@ -921,7 +921,7 @@ export default function KaetaWBS() {
             <h1 className="text-2xl font-bold text-dashboard-text-main">Kaeta! WBS / ガントチャート</h1>
             <p className="text-sm text-dashboard-text-muted">
               エンジニアと共有用プロジェクト管理
-              {saving && <span className="ml-2 text-accent-blue">保存中...</span>}
+              {saving && <span className="ml-2 text-accent-blue-text">保存中...</span>}
             </p>
           </div>
           <div className="flex gap-2">
@@ -974,9 +974,11 @@ export default function KaetaWBS() {
             </select>
           </div>
           <button
-            onClick={() => setViewStartDate(new Date().toISOString().split('T')[0])}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-dashboard-border hover:bg-gray-50 transition-colors"
-            style={{ color: '#009EA4' }}
+            onClick={(e) => {
+              e.stopPropagation()
+              setViewStartDate(new Date().toISOString().split('T')[0])
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-dashboard-border hover:bg-gray-50 transition-colors text-accent-blue-text-text"
             title="チャートの先頭を今日に移動"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1316,7 +1318,7 @@ export default function KaetaWBS() {
                           {/* クイック追加ボタン */}
                           <div
                             onClick={() => openTaskModal('add', undefined, phase, category)}
-                            className="px-4 h-10 pl-12 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue text-sm flex items-center gap-1"
+                            className="px-4 h-10 pl-12 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue-text text-sm flex items-center gap-1"
                           >
                             <span>+</span> タスクを追加
                           </div>
@@ -1329,7 +1331,7 @@ export default function KaetaWBS() {
                   {Object.keys(categories).length === 0 && (
                     <div
                       onClick={() => openTaskModal('add', undefined, phase, '')}
-                      className="px-4 h-10 pl-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue text-sm flex items-center gap-1"
+                      className="px-4 h-10 pl-8 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue-text text-sm flex items-center gap-1"
                     >
                       <span>+</span> タスクを追加
                     </div>
@@ -1506,7 +1508,7 @@ export default function KaetaWBS() {
                   'bg-yellow-500'
                 }`}></span>
                 {status}
-                {isSelected && <span className="ml-auto text-accent-blue">✓</span>}
+                {isSelected && <span className="ml-auto text-accent-blue-text">✓</span>}
               </button>
             )
           })}
@@ -1534,7 +1536,7 @@ export default function KaetaWBS() {
                 <span className="flex items-center" style={{ paddingLeft: `${level * 12}px` }}>
                   {level === 0 ? '親タスク' : `${'└'.repeat(1)} レベル ${level}`}
                 </span>
-                {isSelected && <span className="ml-auto text-accent-blue-text">✓</span>}
+                {isSelected && <span className="ml-auto text-accent-blue-text-text">✓</span>}
               </button>
             )
           })}
@@ -1721,7 +1723,7 @@ export default function KaetaWBS() {
                           <button
                             type="button"
                             onClick={() => setShowDatePicker(false)}
-                            className="text-sm text-accent-blue hover:underline"
+                            className="text-sm text-accent-blue-text hover:underline"
                           >
                             閉じる
                           </button>
@@ -1834,7 +1836,7 @@ export default function KaetaWBS() {
                         />
                         <button
                           onClick={() => updatePhase(phase.id, editingPhase.name)}
-                          className="text-accent-blue text-sm hover:underline"
+                          className="text-accent-blue-text text-sm hover:underline"
                         >
                           保存
                         </button>
@@ -1850,7 +1852,7 @@ export default function KaetaWBS() {
                         <span className="flex-1 text-dashboard-text-main">{phase.name}</span>
                         <button
                           onClick={() => setEditingPhase(phase)}
-                          className="text-accent-blue text-sm hover:underline"
+                          className="text-accent-blue-text text-sm hover:underline"
                         >
                           編集
                         </button>
