@@ -78,7 +78,7 @@ export default function KaetaWBS() {
     return categories.sort()
   }, [tasks])
 
-  // ドラッグ関連の状態
+  // ガントチャートドラッグ関連の状態
   const [dragState, setDragState] = useState<{
     taskId: number | null
     type: 'move' | 'resize-start' | 'resize-end' | null
@@ -87,6 +87,17 @@ export default function KaetaWBS() {
     originalEnd: string
   }>({ taskId: null, type: null, startX: 0, originalStart: '', originalEnd: '' })
   const ganttRef = useRef<HTMLDivElement>(null)
+
+  // タスクリストドラッグ＆ドロップ関連の状態
+  const [taskDragState, setTaskDragState] = useState<{
+    draggingTaskId: number | null
+    dropTarget: {
+      taskId: number | null
+      position: 'before' | 'after' | 'child' | null
+      phase?: string
+      category?: string
+    } | null
+  }>({ draggingTaskId: null, dropTarget: null })
 
   // 新規/編集タスク用の状態
   const [editingTask, setEditingTask] = useState({
@@ -188,14 +199,107 @@ export default function KaetaWBS() {
     setStatusPopup(null)
   }
 
-  // インデント操作
+  // インデント操作（楽観的更新でカクつき軽減）
   const changeIndent = async (task: Task, delta: number, e: React.MouseEvent) => {
     e.stopPropagation()
     const currentLevel = task.indent_level || 0
     const newLevel = Math.max(0, Math.min(3, currentLevel + delta))
     if (newLevel !== currentLevel) {
-      await updateTask(task.id, 'indent_level', newLevel)
+      // 即座にUIを更新（楽観的更新）
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, indent_level: newLevel } : t))
+      // バックグラウンドでDB更新
+      const { error } = await supabase
+        .from('tasks')
+        .update({ indent_level: newLevel, updated_at: new Date().toISOString() })
+        .eq('id', task.id)
+      if (error) {
+        console.error('Error updating indent:', error)
+        // エラー時は元に戻す
+        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, indent_level: currentLevel } : t))
+      }
     }
+  }
+
+  // タスクリストのドラッグアンドドロップハンドラー
+  const handleTaskDragStart = (e: React.DragEvent, task: Task) => {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', task.id.toString())
+    setTaskDragState({ draggingTaskId: task.id, dropTarget: null })
+  }
+
+  const handleTaskDragOver = (e: React.DragEvent, targetTask: Task, position: 'before' | 'after' | 'child') => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (taskDragState.draggingTaskId === targetTask.id) return
+
+    setTaskDragState(prev => ({
+      ...prev,
+      dropTarget: {
+        taskId: targetTask.id,
+        position,
+        phase: targetTask.phase,
+        category: targetTask.category
+      }
+    }))
+  }
+
+  const handleTaskDragLeave = (e: React.DragEvent) => {
+    // 子要素へのドラッグ移動時は無視
+    const relatedTarget = e.relatedTarget as HTMLElement
+    if (relatedTarget && e.currentTarget.contains(relatedTarget)) return
+  }
+
+  const handleTaskDrop = async (e: React.DragEvent, targetTask: Task, position: 'before' | 'after' | 'child') => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const draggedTaskId = parseInt(e.dataTransfer.getData('text/plain'))
+    if (!draggedTaskId || draggedTaskId === targetTask.id) {
+      setTaskDragState({ draggingTaskId: null, dropTarget: null })
+      return
+    }
+
+    const draggedTask = tasks.find(t => t.id === draggedTaskId)
+    if (!draggedTask) {
+      setTaskDragState({ draggingTaskId: null, dropTarget: null })
+      return
+    }
+
+    // 更新するフィールドを決定
+    const updates: Partial<Task> = {
+      phase: targetTask.phase,
+      category: targetTask.category
+    }
+
+    // childの場合、ターゲットのインデント+1にする
+    if (position === 'child') {
+      updates.indent_level = Math.min((targetTask.indent_level || 0) + 1, 3)
+    } else {
+      // before/afterの場合、同じインデントレベル
+      updates.indent_level = targetTask.indent_level || 0
+    }
+
+    // 楽観的更新
+    setTasks(prev => prev.map(t =>
+      t.id === draggedTaskId ? { ...t, ...updates } : t
+    ))
+
+    // DB更新
+    const { error } = await supabase
+      .from('tasks')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', draggedTaskId)
+
+    if (error) {
+      console.error('Error moving task:', error)
+      fetchTasks() // エラー時は再取得
+    }
+
+    setTaskDragState({ draggingTaskId: null, dropTarget: null })
+  }
+
+  const handleTaskDragEnd = () => {
+    setTaskDragState({ draggingTaskId: null, dropTarget: null })
   }
 
   // タスク追加
@@ -425,9 +529,9 @@ export default function KaetaWBS() {
 
   const getOwnerColor = (owner: string) => {
     switch (owner) {
-      case 'エンジニア': return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'デザイナー': return 'bg-pink-100 text-pink-800 border-pink-200'
-      case '共同': return 'bg-purple-100 text-purple-800 border-purple-200'
+      case 'エンジニア': return 'bg-accent-blue text-accent-blue-text border-accent-blue'
+      case 'デザイナー': return 'bg-accent-pink text-accent-pink-text border-accent-pink'
+      case '共同': return 'bg-accent-purple text-accent-purple-text border-accent-purple'
       default: return 'bg-gray-100 text-dashboard-text-muted border-gray-200'
     }
   }
@@ -692,7 +796,37 @@ export default function KaetaWBS() {
               {/* Phase Header */}
               <div
                 onClick={() => togglePhaseAccordion(phase)}
-                className="bg-gray-100 text-dashboard-text-main px-4 py-3 text-sm font-semibold sticky top-8 z-10 cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border"
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  if (taskDragState.draggingTaskId) {
+                    setTaskDragState(prev => ({
+                      ...prev,
+                      dropTarget: { taskId: null, position: 'after', phase, category: '' }
+                    }))
+                  }
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault()
+                  const draggedTaskId = parseInt(e.dataTransfer.getData('text/plain'))
+                  if (!draggedTaskId) return
+                  const draggedTask = tasks.find(t => t.id === draggedTaskId)
+                  if (!draggedTask) return
+
+                  // カテゴリなしでフェーズに移動
+                  const updates = { phase, category: '', indent_level: 0 }
+                  setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, ...updates } : t))
+
+                  const { error } = await supabase
+                    .from('tasks')
+                    .update({ ...updates, updated_at: new Date().toISOString() })
+                    .eq('id', draggedTaskId)
+
+                  if (error) fetchTasks()
+                  setTaskDragState({ draggingTaskId: null, dropTarget: null })
+                }}
+                className={`bg-gray-100 text-dashboard-text-main px-4 py-3 text-sm font-semibold sticky top-8 z-10 cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border transition-all
+                  ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === '' && taskDragState.dropTarget?.taskId === null ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/20' : ''}
+                `}
               >
                 <div className="flex items-center gap-2">
                   <span className={`transform transition-transform ${isPhaseExpanded(phase) ? 'rotate-90' : ''}`}>▶</span>
@@ -710,7 +844,36 @@ export default function KaetaWBS() {
                       {/* Category Header */}
                       <div
                         onClick={() => toggleCategoryAccordion(phase, category)}
-                        className="bg-gray-50 text-dashboard-text-main px-4 py-2 pl-8 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-between border-b border-dashboard-border"
+                        onDragOver={(e) => {
+                          e.preventDefault()
+                          if (taskDragState.draggingTaskId) {
+                            setTaskDragState(prev => ({
+                              ...prev,
+                              dropTarget: { taskId: null, position: 'after', phase, category }
+                            }))
+                          }
+                        }}
+                        onDrop={async (e) => {
+                          e.preventDefault()
+                          const draggedTaskId = parseInt(e.dataTransfer.getData('text/plain'))
+                          if (!draggedTaskId) return
+                          const draggedTask = tasks.find(t => t.id === draggedTaskId)
+                          if (!draggedTask) return
+
+                          const updates = { phase, category, indent_level: 0 }
+                          setTasks(prev => prev.map(t => t.id === draggedTaskId ? { ...t, ...updates } : t))
+
+                          const { error } = await supabase
+                            .from('tasks')
+                            .update({ ...updates, updated_at: new Date().toISOString() })
+                            .eq('id', draggedTaskId)
+
+                          if (error) fetchTasks()
+                          setTaskDragState({ draggingTaskId: null, dropTarget: null })
+                        }}
+                        className={`bg-gray-50 text-dashboard-text-main px-4 py-2 pl-8 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-between border-b border-dashboard-border transition-all
+                          ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === category && taskDragState.dropTarget?.taskId === null ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/10' : ''}
+                        `}
                       >
                         <div className="flex items-center gap-2">
                           <span className={`transform transition-transform text-xs ${isCategoryExpanded(phase, category) ? 'rotate-90' : ''}`}>▶</span>
@@ -723,60 +886,142 @@ export default function KaetaWBS() {
 
                       {isCategoryExpanded(phase, category) && (
                         <>
-                          {categoryTasks.map(task => (
-                            <div
-                              key={task.id}
-                              onClick={() => openTaskModal('edit', task)}
-                              className={`group/task px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 grid grid-cols-12 gap-2 items-center ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}`}
-                              style={{ paddingLeft: `${16 + (task.indent_level || 0) * 16}px` }}
-                            >
-                              <div className="col-span-5 flex items-center gap-2">
-                                {/* インデントボタン - ホバー時のみ表示 */}
-                                <div className="flex gap-0.5 opacity-0 group-hover/task:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={(e) => changeIndent(task, -1, e)}
-                                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
-                                    title="インデント減"
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                      <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                      <line x1="2" y1="7" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                      <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                    </svg>
-                                  </button>
-                                  <button
-                                    onClick={(e) => changeIndent(task, 1, e)}
-                                    className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
-                                    title="インデント増"
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                      <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                      <line x1="6" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                      <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                    </svg>
-                                  </button>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
-                                  <p className="text-xs text-dashboard-text-muted">{task.start_date} 〜 {task.end_date}</p>
-                                </div>
-                              </div>
-                              <div className="col-span-4">
-                                <span className={`text-xs px-2 py-1 rounded border ${getOwnerColor(task.owner)}`}>
-                                  {task.owner}
-                                </span>
-                              </div>
-                              <div className="col-span-3">
-                                <button
-                                  onClick={(e) => openStatusPopup(task, e)}
-                                  className={`text-xs px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(task.status)}`}
-                                  title="クリックでステータス変更"
+                          {categoryTasks.map((task) => {
+                            const isDragging = taskDragState.draggingTaskId === task.id
+                            const isDropTargetBefore = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'before'
+                            const isDropTargetAfter = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'after'
+                            const isDropTargetChild = taskDragState.dropTarget?.taskId === task.id && taskDragState.dropTarget?.position === 'child'
+                            const indentLevel = task.indent_level || 0
+
+                            return (
+                              <div key={task.id} className="relative">
+                                {/* ドロップインジケーター（上） */}
+                                {isDropTargetBefore && (
+                                  <div
+                                    className="absolute top-0 left-0 right-0 h-1 bg-accent-blue z-10"
+                                    style={{ marginLeft: `${16 + indentLevel * 24}px` }}
+                                  />
+                                )}
+
+                                {/* タスク行 */}
+                                <div
+                                  draggable
+                                  onDragStart={(e) => handleTaskDragStart(e, task)}
+                                  onDragEnd={handleTaskDragEnd}
+                                  onDragOver={(e) => {
+                                    e.preventDefault()
+                                    const rect = e.currentTarget.getBoundingClientRect()
+                                    const y = e.clientY - rect.top
+                                    const height = rect.height
+                                    // 上部20%: before, 下部20%: after, 中央: child
+                                    if (y < height * 0.25) {
+                                      handleTaskDragOver(e, task, 'before')
+                                    } else if (y > height * 0.75) {
+                                      handleTaskDragOver(e, task, 'after')
+                                    } else {
+                                      handleTaskDragOver(e, task, 'child')
+                                    }
+                                  }}
+                                  onDragLeave={handleTaskDragLeave}
+                                  onDrop={(e) => {
+                                    const position = taskDragState.dropTarget?.position || 'after'
+                                    handleTaskDrop(e, task, position)
+                                  }}
+                                  onClick={() => openTaskModal('edit', task)}
+                                  className={`group/task px-4 py-3 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
+                                    ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}
+                                    ${isDragging ? 'opacity-50 bg-gray-100' : ''}
+                                    ${isDropTargetChild ? 'bg-accent-blue/20 ring-2 ring-accent-blue ring-inset' : ''}
+                                  `}
+                                  style={{ paddingLeft: `${16 + indentLevel * 24}px` }}
                                 >
-                                  {task.status}
-                                </button>
+                                  {/* 階層構造の接続線 */}
+                                  {indentLevel > 0 && (
+                                    <div className="absolute left-0 top-0 bottom-0 pointer-events-none" style={{ width: `${16 + indentLevel * 24}px` }}>
+                                      {Array.from({ length: indentLevel }).map((_, i) => (
+                                        <div
+                                          key={i}
+                                          className="absolute top-0 bottom-0 w-px bg-gray-200 group-hover/task:bg-gray-300"
+                                          style={{ left: `${16 + i * 24 + 8}px` }}
+                                        />
+                                      ))}
+                                      {/* 横線（接続線） */}
+                                      <div
+                                        className="absolute h-px bg-gray-200 group-hover/task:bg-gray-300"
+                                        style={{
+                                          left: `${16 + (indentLevel - 1) * 24 + 8}px`,
+                                          top: '50%',
+                                          width: '16px'
+                                        }}
+                                      />
+                                    </div>
+                                  )}
+
+                                  <div className="col-span-5 flex items-center gap-2">
+                                    {/* ドラッグハンドル - ホバー時のみ表示 */}
+                                    <div className="flex items-center gap-1 opacity-0 group-hover/task:opacity-100 transition-opacity">
+                                      <span className="cursor-grab text-dashboard-text-muted hover:text-dashboard-text-main" title="ドラッグして移動">
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                                          <circle cx="3" cy="3" r="1.5"/>
+                                          <circle cx="9" cy="3" r="1.5"/>
+                                          <circle cx="3" cy="9" r="1.5"/>
+                                          <circle cx="9" cy="9" r="1.5"/>
+                                        </svg>
+                                      </span>
+                                      <button
+                                        onClick={(e) => changeIndent(task, -1, e)}
+                                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
+                                        title="インデント減"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                          <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                          <line x1="2" y1="7" x2="8" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                          <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={(e) => changeIndent(task, 1, e)}
+                                        className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 text-dashboard-text-muted"
+                                        title="インデント増"
+                                      >
+                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                          <line x1="2" y1="4" x2="12" y2="4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                          <line x1="6" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                          <line x1="2" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
+                                      <p className="text-xs text-dashboard-text-muted">{task.start_date} 〜 {task.end_date}</p>
+                                    </div>
+                                  </div>
+                                  <div className="col-span-4">
+                                    <span className={`text-xs px-2 py-1 rounded border ${getOwnerColor(task.owner)}`}>
+                                      {task.owner}
+                                    </span>
+                                  </div>
+                                  <div className="col-span-3">
+                                    <button
+                                      onClick={(e) => openStatusPopup(task, e)}
+                                      className={`text-xs px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(task.status)}`}
+                                      title="クリックでステータス変更"
+                                    >
+                                      {task.status}
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* ドロップインジケーター（下） */}
+                                {isDropTargetAfter && (
+                                  <div
+                                    className="absolute bottom-0 left-0 right-0 h-1 bg-accent-blue z-10"
+                                    style={{ marginLeft: `${16 + indentLevel * 24}px` }}
+                                  />
+                                )}
                               </div>
-                            </div>
-                          ))}
+                            )
+                          })}
 
                           {/* クイック追加ボタン */}
                           <div

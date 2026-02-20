@@ -23,6 +23,9 @@
   --color-accent-blue: #D5F0EF;
   --color-accent-pink: #FFE5E4;
   --color-accent-purple: #EFE4FD;
+  --color-accent-blue-text: #0D7377;
+  --color-accent-pink-text: #BE185D;
+  --color-accent-purple-text: #7C3AED;
 
   /* Border Radius */
   --radius-card: 16px;
