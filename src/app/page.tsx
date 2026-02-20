@@ -357,18 +357,25 @@ export default function KaetaWBS() {
   const handleTaskDrop = async (e: React.DragEvent, targetTask: Task, position: 'before' | 'after' | 'child') => {
     e.preventDefault()
     e.stopPropagation()
+    console.log('=== handleTaskDrop 開始 ===')
+    console.log('targetTask:', targetTask.name, 'position:', position)
 
     const draggedTaskId = taskDragState.draggingTaskId
+    console.log('draggedTaskId:', draggedTaskId)
+
     if (!draggedTaskId || draggedTaskId === targetTask.id) {
+      console.log('早期リターン: draggedTaskId問題')
       setTaskDragState(resetTaskDragState())
       return
     }
 
     const draggedTask = tasks.find(t => t.id === draggedTaskId)
     if (!draggedTask) {
+      console.log('早期リターン: draggedTask見つからない')
       setTaskDragState(resetTaskDragState())
       return
     }
+    console.log('draggedTask:', draggedTask.name)
     // 移動先カテゴリ内のタスクを取得してソート（ドラッグ中のタスクを除外）
     const sameCategoryTasks = tasks
       .filter(t => t.phase === targetTask.phase && t.category === targetTask.category && t.id !== draggedTaskId)
@@ -423,19 +430,27 @@ export default function KaetaWBS() {
       updates.indent_level = taskDragState.previewIndent
     }
 
+    console.log('updates:', updates)
+
     // 楽観的更新
     const originalTask = { ...draggedTask }
     setTasks(prev => prev.map(t =>
       t.id === draggedTaskId ? { ...t, ...updates } : t
     ))
+    console.log('楽観的更新完了')
 
     // DB更新
-    const { error } = await supabase
+    console.log('Supabase更新開始')
+    const { error, data } = await supabase
       .from('tasks')
       .update(updates)
       .eq('id', draggedTaskId)
+      .select()
+
+    console.log('Supabase結果:', { error, data })
 
     if (error) {
+      console.error('Supabaseエラー:', error)
       // エラー時は元に戻す
       setTasks(prev => prev.map(t =>
         t.id === draggedTaskId ? originalTask : t
