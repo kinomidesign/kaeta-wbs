@@ -326,21 +326,17 @@ export default function KaetaWBS() {
   const handleTaskDragOver = (e: React.DragEvent, targetTask: Task, position: 'before' | 'after' | 'child') => {
     e.preventDefault()
     e.stopPropagation()
+
+    // 自分自身へのドロップは無視
     if (taskDragState.draggingTaskId === targetTask.id) return
 
-    // X座標の変化に基づいてインデントレベルを計算（24pxごとに1レベル）
-    const deltaX = e.clientX - taskDragState.startX
-    const indentDelta = Math.round(deltaX / 40) // 40pxごとに1レベル変更
-    const newIndent = Math.max(0, Math.min(3, taskDragState.originalIndent + indentDelta))
-
-    // スロットリング: 同じターゲットかつ同じインデントなら更新しない
-    const targetKey = `${targetTask.id}-${position}-${newIndent}`
+    // スロットリング: 同じターゲット・同じ位置なら更新しない
+    const targetKey = `${targetTask.id}-${position}`
     if (lastDropTargetRef.current === targetKey) return
     lastDropTargetRef.current = targetKey
 
     setTaskDragState(prev => ({
       ...prev,
-      previewIndent: newIndent,
       dropTarget: {
         taskId: targetTask.id,
         position,
@@ -350,10 +346,8 @@ export default function KaetaWBS() {
     }))
   }
 
-  const handleTaskDragLeave = (e: React.DragEvent) => {
-    // 子要素へのドラッグ移動時は無視
-    const relatedTarget = e.relatedTarget as HTMLElement
-    if (relatedTarget && e.currentTarget.contains(relatedTarget)) return
+  const handleTaskDragLeave = () => {
+    // 何もしない（次のonDragOverで上書きされる）
   }
 
   const handleTaskDrop = async (e: React.DragEvent, targetTask: Task, position: 'before' | 'after' | 'child') => {
@@ -956,12 +950,15 @@ export default function KaetaWBS() {
                 onClick={() => togglePhaseAccordion(phase)}
                 onDragOver={(e) => {
                   e.preventDefault()
-                  if (taskDragState.draggingTaskId) {
-                    setTaskDragState(prev => ({
-                      ...prev,
-                      dropTarget: { taskId: null, position: 'after', phase, category: '' }
-                    }))
-                  }
+                  e.stopPropagation()
+                  if (!taskDragState.draggingTaskId) return
+                  const targetKey = `phase-${phase}`
+                  if (lastDropTargetRef.current === targetKey) return
+                  lastDropTargetRef.current = targetKey
+                  setTaskDragState(prev => ({
+                    ...prev,
+                    dropTarget: { taskId: null, position: 'after', phase, category: '' }
+                  }))
                 }}
                 onDrop={async (e) => {
                   e.preventDefault()
@@ -1013,12 +1010,15 @@ export default function KaetaWBS() {
                         onClick={() => toggleCategoryAccordion(phase, category)}
                         onDragOver={(e) => {
                           e.preventDefault()
-                          if (taskDragState.draggingTaskId) {
-                            setTaskDragState(prev => ({
-                              ...prev,
-                              dropTarget: { taskId: null, position: 'after', phase, category }
-                            }))
-                          }
+                          e.stopPropagation()
+                          if (!taskDragState.draggingTaskId) return
+                          const targetKey = `category-${phase}-${category}`
+                          if (lastDropTargetRef.current === targetKey) return
+                          lastDropTargetRef.current = targetKey
+                          setTaskDragState(prev => ({
+                            ...prev,
+                            dropTarget: { taskId: null, position: 'after', phase, category }
+                          }))
                         }}
                         onDrop={async (e) => {
                           e.preventDefault()
