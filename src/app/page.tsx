@@ -1445,7 +1445,7 @@ export default function KaetaWBS() {
                                       )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-dashboard-text-main truncate">{task.name}</p>
+                                      <p className="text-sm font-medium text-dashboard-text-main break-words">{task.name}</p>
                                     </div>
                                   </div>
 
