@@ -1223,21 +1223,7 @@ export default function KaetaWBS() {
         onClick={() => { setStatusPopup(null); setIndentPopup(null); }}
       >
         {/* Task List (Left) - 縦スクロールのみ */}
-        <div ref={taskListRef} onScroll={handleTaskListScroll} className="flex-shrink-0 bg-dashboard-card relative overflow-y-auto overflow-x-hidden" style={{ width: `${tableWidth}px` }}>
-          {/* リサイズハンドル */}
-          <div
-            className={`absolute top-0 right-0 w-1 h-full cursor-col-resize z-30 group hover:bg-[#009EA4] transition-colors ${isResizing ? 'bg-[#009EA4]' : 'bg-dashboard-border'}`}
-            onMouseDown={handleResizeStart}
-          >
-            {/* ホバー時のリサイズアイコン */}
-            <div className="absolute top-1/2 -translate-y-1/2 -right-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              <div className="bg-[#009EA4] rounded-full p-1.5 shadow-md">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
-                  <path d="M2 6L4.5 3.5V8.5L2 6ZM10 6L7.5 3.5V8.5L10 6Z" />
-                </svg>
-              </div>
-            </div>
-          </div>
+        <div ref={taskListRef} onScroll={handleTaskListScroll} className="flex-shrink-0 bg-dashboard-card relative overflow-y-auto overflow-x-hidden scrollbar-hide" style={{ width: `${tableWidth}px` }}>
           <div className="sticky top-0 bg-gray-50 border-b border-dashboard-border px-4 py-2 text-xs font-medium text-dashboard-text-muted grid grid-cols-12 gap-2 z-20">
             <div className="col-span-5">タスク</div>
             <div className="col-span-2 text-center">担当者</div>
@@ -1560,6 +1546,21 @@ export default function KaetaWBS() {
               )}
             </div>
           ))}
+        </div>
+
+        {/* リサイズハンドル（独立した兄弟要素として配置） */}
+        <div
+          className={`flex-shrink-0 w-1 cursor-col-resize z-30 group hover:bg-[#009EA4] transition-colors relative ${isResizing ? 'bg-[#009EA4]' : 'bg-dashboard-border'}`}
+          onMouseDown={handleResizeStart}
+        >
+          {/* ホバー時のリサイズアイコン */}
+          <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            <div className="bg-[#009EA4] rounded-full p-1.5 shadow-md">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="white">
+                <path d="M2 6L4.5 3.5V8.5L2 6ZM10 6L7.5 3.5V8.5L10 6Z" />
+              </svg>
+            </div>
+          </div>
         </div>
 
         {/* Gantt Chart (Right) - 横スクロール可能 */}
