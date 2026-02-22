@@ -1,10 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { DayPicker, DateRange } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
 import * as dateFnsLocale from 'date-fns/locale'
-import type { Task, Phase, Category, EditingTask } from '@/types'
+import type { Phase, Category, EditingTask } from '@/types'
 import { OWNERS, STATUSES } from '@/constants'
-import { getStatusColor } from '@/utils/style'
 import { formatDateString } from '@/utils/date'
 
 const ja = dateFnsLocale.ja
@@ -15,6 +14,9 @@ const EditIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
   </svg>
 )
+
+// Active状態の統一色
+const ACTIVE_COLOR = '#394548'
 
 interface TaskModalProps {
   mode: 'add' | 'edit'
@@ -52,8 +54,31 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
     return undefined
   })
-  const [showDatePicker, setShowDatePicker] = useState(false)
-  const [showOwnerDropdown, setShowOwnerDropdown] = useState(false)
+
+  // ドロップダウン状態の管理
+  type DropdownType = 'date' | 'owner' | 'status' | null
+  const [activeDropdown, setActiveDropdown] = useState<DropdownType>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  // ドロップダウンを開く（他を閉じる）
+  const openDropdown = (type: DropdownType) => {
+    setActiveDropdown(prev => prev === type ? null : type)
+  }
+
+  // 外部クリックでドロップダウンを閉じる
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (activeDropdown && modalRef.current) {
+        const target = e.target as HTMLElement
+        // ドロップダウン関連の要素かチェック
+        if (!target.closest('[data-dropdown]')) {
+          setActiveDropdown(null)
+        }
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [activeDropdown])
 
   const handleDateRangeSelect = (range: DateRange | undefined) => {
     setDateRange(range)
@@ -71,15 +96,28 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     ? categories.filter(c => c.phase_id === selectedPhase.id).sort((a, b) => a.sort_order - b.sort_order)
     : []
 
+  // ステータスの色（ピル用）
+  const getStatusPillStyle = (status: string, isSelected: boolean) => {
+    if (!isSelected) return 'bg-gray-100 text-gray-500'
+    switch (status) {
+      case '未着手': return 'bg-gray-200 text-gray-700'
+      case '進行中': return 'bg-blue-100 text-blue-700'
+      case '完了': return 'bg-green-100 text-green-700'
+      case '保留': return 'bg-yellow-100 text-yellow-700'
+      default: return 'bg-gray-200 text-gray-700'
+    }
+  }
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-dashboard-card rounded-[16px] w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-lg" onClick={e => e.stopPropagation()}>
-        <div className="p-6">
-          {/* ヘッダー */}
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-dashboard-text-main">
-              {mode === 'add' ? 'タスクを追加' : 'タスクを編集'}
-            </h2>
+    <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-8" onClick={onClose}>
+      <div
+        ref={modalRef}
+        className="bg-dashboard-card rounded-[16px] w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-lg"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-8">
+          {/* ヘッダー - 閉じるボタンのみ */}
+          <div className="flex justify-end mb-2">
             <button onClick={onClose} className="text-dashboard-text-muted hover:text-dashboard-text-main text-xl leading-none">×</button>
           </div>
 
@@ -90,7 +128,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 type="text"
                 value={editingTask.name}
                 onChange={(e) => setEditingTask({ ...editingTask, name: e.target.value })}
-                className="w-full text-2xl font-medium text-dashboard-text-main placeholder:text-dashboard-text-muted/60 bg-transparent border-none outline-none focus:ring-0"
+                className="w-full text-[2rem] font-medium text-dashboard-text-main placeholder:text-dashboard-text-muted/60 bg-transparent border-none outline-none focus:ring-0"
                 placeholder="タスク名を入力..."
                 autoFocus
               />
@@ -99,18 +137,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             {/* 日付・担当者・ステータス - 3列グリッド */}
             <div className="grid grid-cols-3 gap-6">
               {/* 日付 */}
-              <div className="relative">
+              <div className="relative" data-dropdown>
                 <label className="block text-sm text-dashboard-text-muted mb-1">日付</label>
                 <button
                   type="button"
-                  onClick={() => setShowDatePicker(!showDatePicker)}
+                  onClick={() => openDropdown('date')}
                   className="text-sm text-dashboard-text-main hover:text-dashboard-text-muted text-left"
                 >
                   {editingTask.start_date && editingTask.end_date
                     ? `${editingTask.start_date} ~ ${editingTask.end_date}`
                     : '未設定'}
                 </button>
-                {showDatePicker && (
+                {activeDropdown === 'date' && (
                   <div className="absolute z-50 mt-1 left-0 bg-dashboard-card rounded-lg shadow-lg border border-dashboard-border p-2">
                     <DayPicker
                       mode="range"
@@ -135,7 +173,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       )}
                       <button
                         type="button"
-                        onClick={() => setShowDatePicker(false)}
+                        onClick={() => setActiveDropdown(null)}
                         className="text-sm text-dashboard-text-muted hover:text-dashboard-text-main ml-auto"
                       >
                         閉じる
@@ -146,16 +184,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </div>
 
               {/* 担当者 */}
-              <div className="relative">
+              <div className="relative" data-dropdown>
                 <label className="block text-sm text-dashboard-text-muted mb-1">担当者</label>
                 <button
                   type="button"
-                  onClick={() => setShowOwnerDropdown(!showOwnerDropdown)}
+                  onClick={() => openDropdown('owner')}
                   className="text-sm text-dashboard-text-main hover:text-dashboard-text-muted text-left"
                 >
                   {editingTask.owner || '未入力'}
                 </button>
-                {showOwnerDropdown && (
+                {activeDropdown === 'owner' && (
                   <div className="absolute z-50 mt-1 left-0 bg-dashboard-card rounded-lg shadow-lg border border-dashboard-border py-1 min-w-[120px]">
                     {OWNERS.map(o => (
                       <button
@@ -163,7 +201,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         type="button"
                         onClick={() => {
                           setEditingTask({ ...editingTask, owner: o })
-                          setShowOwnerDropdown(false)
+                          setActiveDropdown(null)
                         }}
                         className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 ${
                           editingTask.owner === o ? 'bg-gray-50 font-medium' : ''
@@ -177,11 +215,34 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </div>
 
               {/* ステータス */}
-              <div>
+              <div className="relative" data-dropdown>
                 <label className="block text-sm text-dashboard-text-muted mb-1">ステータス</label>
-                <span className={`inline-block text-sm px-2 py-0.5 rounded-full ${getStatusColor(editingTask.status)}`}>
+                <button
+                  type="button"
+                  onClick={() => openDropdown('status')}
+                  className={`inline-block text-sm px-2 py-0.5 rounded-full cursor-pointer ${getStatusPillStyle(editingTask.status, true)}`}
+                >
                   {editingTask.status}
-                </span>
+                </button>
+                {activeDropdown === 'status' && (
+                  <div className="absolute z-50 mt-1 left-0 bg-dashboard-card rounded-lg shadow-lg border border-dashboard-border py-1 min-w-[120px]">
+                    {STATUSES.map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          setEditingTask({ ...editingTask, status: s })
+                          setActiveDropdown(null)
+                        }}
+                        className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 ${
+                          editingTask.status === s ? 'bg-gray-50 font-medium' : ''
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -205,9 +266,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     onClick={() => setEditingTask({ ...editingTask, phase: p, category: '' })}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
                       editingTask.phase === p
-                        ? 'bg-dashboard-primary text-white'
+                        ? 'text-white'
                         : 'bg-gray-100 text-dashboard-text-muted hover:bg-gray-200'
                     }`}
+                    style={editingTask.phase === p ? { backgroundColor: ACTIVE_COLOR } : {}}
                   >
                     {p}
                   </button>
@@ -237,9 +299,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       onClick={() => setEditingTask({ ...editingTask, category: cat.name })}
                       className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
                         editingTask.category === cat.name
-                          ? 'bg-gray-200 text-dashboard-text-main'
+                          ? 'text-white'
                           : 'bg-gray-100 text-dashboard-text-muted hover:bg-gray-200'
                       }`}
+                      style={editingTask.category === cat.name ? { backgroundColor: ACTIVE_COLOR } : {}}
                     >
                       {cat.name}
                     </button>
