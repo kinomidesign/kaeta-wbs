@@ -5,6 +5,7 @@ import * as dateFnsLocale from 'date-fns/locale'
 import type { Task, Phase, Category, EditingTask } from '@/types'
 import { OWNERS, PRIORITIES, STATUSES } from '@/constants'
 import { getStatusColor, getOwnerColor } from '@/utils/style'
+import { formatDateString } from '@/utils/date'
 
 const ja = dateFnsLocale.ja
 
@@ -51,8 +52,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     if (range?.from) {
       setEditingTask(prev => ({
         ...prev,
-        start_date: range.from!.toISOString().split('T')[0],
-        end_date: range.to ? range.to.toISOString().split('T')[0] : range.from!.toISOString().split('T')[0]
+        start_date: formatDateString(range.from!),
+        end_date: range.to ? formatDateString(range.to) : formatDateString(range.from!)
       }))
     }
   }

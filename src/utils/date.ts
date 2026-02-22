@@ -4,19 +4,29 @@ import {
 } from '@/constants'
 
 /**
+ * 日付文字列（YYYY-MM-DD）をローカルタイムゾーンでDateオブジェクトに変換
+ * new Date("2026-02-10") はUTC午前0時として解釈されるため、
+ * タイムゾーンによる1日ずれを防ぐために明示的にローカルタイムで作成する
+ */
+export const parseDateString = (dateString: string): Date => {
+  const [year, month, day] = dateString.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+/**
  * 2つの日付間の日数を計算（開始日と終了日を含む）
  */
 export const getDaysBetween = (start: string, end: string): number => {
-  const startDate = new Date(start)
-  const endDate = new Date(end)
+  const startDate = parseDateString(start)
+  const endDate = parseDateString(end)
   return Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
 }
 
 /**
  * 基準日からの日数オフセットを計算 */
 export const getDaysFromStart = (date: string, viewStart: string): number => {
-  const taskDate = new Date(date)
-  const startDate = new Date(viewStart)
+  const taskDate = parseDateString(date)
+  const startDate = parseDateString(viewStart)
   return Math.ceil((taskDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
 }
 
@@ -25,14 +35,14 @@ export const getDaysFromStart = (date: string, viewStart: string): number => {
  */
 export const generateDateRange = (startDate: string, days: number = TIMELINE_DAYS): Date[] => {
   const dates: Date[] = []
-  const start = new Date(startDate)
-  
+  const start = parseDateString(startDate)
+
   for (let i = 0; i < days; i++) {
     const date = new Date(start)
     date.setDate(start.getDate() + i)
     dates.push(date)
   }
-  
+
   return dates
 }
 
@@ -72,7 +82,7 @@ export const formatDateDisplay = (dateString: string): string => {
  * 日付に日数を加算
  */
 export const addDays = (dateString: string, days: number): string => {
-  const date = new Date(dateString)
+  const date = parseDateString(dateString)
   date.setDate(date.getDate() + days)
   return formatDateString(date)
 }
@@ -116,7 +126,7 @@ export const isToday = (date: Date): boolean => {
  * 仮想スクロール用：タイムライン開始日（基準日-365日）からの日数
  */
 export const getDaysFromBase = (date: string): number => {
-  const taskDate = new Date(date)
+  const taskDate = parseDateString(date)
   const baseDate = getTimelineStartDate()
   return Math.ceil((taskDate.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
 }
