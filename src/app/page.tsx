@@ -569,47 +569,48 @@ export default function KaetaWBS() {
                           return (
                             <div
                               key={task.id}
-                              className="h-12 border-b border-gray-100 relative"
+                              className="h-12 border-b border-gray-100 relative cursor-crosshair hover:bg-blue-50/30 group/taskrow"
+                              onMouseDown={(e) => {
+                                // ガントバー以外の領域でドラッグ開始
+                                handleTaskDateDragStart(e, task.id, task.phase, task.category)
+                              }}
                             >
-                              {hasDate ? (
-                                <div className="absolute top-3">
+                              {/* 日付設定済みの場合はガントバーを表示 */}
+                              {hasDate && (
+                                <div className="absolute top-3 z-10">
                                   <GanttBar
                                     task={task}
                                     onDragStart={handleGanttDragStart}
                                     isDragging={dragState.taskId === task.id}
                                   />
                                 </div>
-                              ) : (
-                                /* 日付未設定時：ドラッグで日付を設定可能 */
-                                <div
-                                  className="absolute inset-0 cursor-crosshair hover:bg-blue-50/50 group/empty"
-                                  onMouseDown={(e) => handleTaskDateDragStart(e, task.id, task.phase, task.category)}
-                                >
-                                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center opacity-0 group-hover/empty:opacity-100 transition-opacity pointer-events-none">
-                                    <span className="text-xs text-gray-400 bg-white px-2 py-1 rounded border border-dashed border-gray-300">
-                                      ドラッグで日付を設定
-                                    </span>
-                                  </div>
-                                  {/* ドラッグ中のプレビュー */}
-                                  {isNewTaskDragging && draggingTaskId === task.id && (() => {
-                                    const preview = getPreviewInfo()
-                                    if (!preview) return null
-                                    return (
-                                      <div
-                                        className="absolute top-3 h-6 bg-blue-200 border-2 border-blue-400 rounded opacity-70"
-                                        style={{ left: preview.left, width: preview.width }}
-                                      >
-                                        <span className="absolute -top-5 left-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
-                                          {preview.startDate.slice(5)}
-                                        </span>
-                                        <span className="absolute -top-5 right-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
-                                          {preview.endDate.slice(5)}
-                                        </span>
-                                      </div>
-                                    )
-                                  })()}
+                              )}
+                              {/* 日付未設定時のヒント表示 */}
+                              {!hasDate && (
+                                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center opacity-0 group-hover/taskrow:opacity-100 transition-opacity pointer-events-none z-0">
+                                  <span className="text-xs text-gray-400 bg-white px-2 py-1 rounded border border-dashed border-gray-300">
+                                    ドラッグで日付を設定
+                                  </span>
                                 </div>
                               )}
+                              {/* ドラッグ中のプレビュー */}
+                              {isNewTaskDragging && draggingTaskId === task.id && (() => {
+                                const preview = getPreviewInfo()
+                                if (!preview) return null
+                                return (
+                                  <div
+                                    className="absolute top-3 h-6 bg-blue-200 border-2 border-blue-400 rounded opacity-70 z-20"
+                                    style={{ left: preview.left, width: preview.width }}
+                                  >
+                                    <span className="absolute -top-5 left-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
+                                      {preview.startDate.slice(5)}
+                                    </span>
+                                    <span className="absolute -top-5 right-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
+                                      {preview.endDate.slice(5)}
+                                    </span>
+                                  </div>
+                                )
+                              })()}
                             </div>
                           )
                         })}

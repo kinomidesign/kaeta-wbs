@@ -19,7 +19,8 @@ export const DAY_WIDTH = 32
 // タイムライン基準日（現在の年の1月1日）
 export const getTimelineBaseDate = (): Date => {
   const currentYear = new Date().getFullYear()
-  return new Date(`${currentYear}-01-01`)
+  // ローカルタイムで日付を作成（タイムゾーン問題を回避）
+  return new Date(currentYear, 0, 1)
 }
 
 // タイムライン表示範囲（基準日から前後）

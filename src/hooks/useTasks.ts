@@ -92,11 +92,18 @@ export const useTasks = ({ phases, categories }: UseTasksOptions): UseTasksRetur
       ? categories.find(c => c.phase_id === selectedPhase.id && c.name === editingTask.category)
       : null
 
-    // 日付が空文字列の場合はnullに変換
+    // 空文字列の場合はnullに変換
     const taskData = {
-      ...editingTask,
+      phase: editingTask.phase,
+      category: editingTask.category,
+      name: editingTask.name,
+      owner: editingTask.owner,
+      status: editingTask.status,
       start_date: editingTask.start_date || null,
       end_date: editingTask.end_date || null,
+      effort: editingTask.effort || null,
+      priority: editingTask.priority,
+      note: editingTask.note || null,
       category_id: selectedCategory?.id || null,
       indent_level: editingTask.indent_level || 0,
       sort_order: maxSortOrder + 1
@@ -139,11 +146,19 @@ export const useTasks = ({ phases, categories }: UseTasksOptions): UseTasksRetur
       ? categories.find(c => c.phase_id === selectedPhase.id && c.name === editingTask.category)
       : null
 
-    // 日付が空文字列の場合はnullに変換
+    // 空文字列の場合はnullに変換
     const taskData = {
-      ...editingTask,
+      phase: editingTask.phase,
+      category: editingTask.category,
+      name: editingTask.name,
+      owner: editingTask.owner,
+      status: editingTask.status,
       start_date: editingTask.start_date || null,
       end_date: editingTask.end_date || null,
+      effort: editingTask.effort || null,
+      priority: editingTask.priority,
+      note: editingTask.note || null,
+      indent_level: editingTask.indent_level || 0,
       category_id: selectedCategory?.id || null,
       updated_at: new Date().toISOString()
     }

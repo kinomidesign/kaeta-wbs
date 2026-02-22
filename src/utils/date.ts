@@ -45,17 +45,20 @@ export const getYearStartDate = (): string => {
 }
 
 /**
- * 今日の日付を YYYY-MM-DD 形式で取得
+ * 今日の日付を YYYY-MM-DD 形式で取得（ローカルタイム基準）
  */
 export const getTodayString = (): string => {
-  return new Date().toISOString().split('T')[0]
+  return formatDateString(new Date())
 }
 
 /**
- * Date オブジェクトを YYYY-MM-DD 形式の文字列に変換
+ * Date オブジェクトを YYYY-MM-DD 形式の文字列に変換（ローカルタイム基準）
  */
 export const formatDateString = (date: Date): string => {
-  return date.toISOString().split('T')[0]
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 /**

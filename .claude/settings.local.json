@@ -6,7 +6,8 @@
       "Bash(npm install:*)",
       "Bash(npm ls:*)",
       "Bash(npm run dev:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(claude config set:*)"
     ]
   }
 }
