@@ -1605,11 +1605,11 @@ export default function KaetaWBS() {
                 return (
                   <div
                     key={i}
-                    className={`w-8 flex-shrink-0 text-center border-r border-gray-100 ${isWeekend ? 'bg-gray-50' : ''}`}
+                    className={`w-8 flex-shrink-0 text-center border-r border-gray-100 ${isWeekend ? 'bg-gray-100' : 'bg-white'}`}
                   >
                     {(isMonday || isFirstOfMonth || i === 0) && (
                       <div
-                        className={`text-xs font-medium py-1 border-b bg-gray-50 ${isToday ? 'border-b-4' : 'border-dashboard-border'}`}
+                        className={`text-xs font-medium py-1 border-b ${isWeekend ? 'bg-gray-100' : 'bg-gray-50'} ${isToday ? 'border-b-4' : 'border-dashboard-border'}`}
                         style={{
                           color: '#009EA4',
                           borderBottomColor: isToday ? '#009EA4' : undefined
@@ -1620,7 +1620,7 @@ export default function KaetaWBS() {
                     )}
                     {!(isMonday || isFirstOfMonth || i === 0) && (
                       <div
-                        className={`text-xs py-1 ${isToday ? 'border-b-4 font-medium' : 'border-b border-dashboard-border'}`}
+                        className={`text-xs py-1 ${isWeekend ? 'bg-gray-100' : 'bg-white'} ${isToday ? 'border-b-4 font-medium' : 'border-b border-dashboard-border'}`}
                         style={{
                           color: isToday ? '#009EA4' : undefined,
                           borderBottomColor: isToday ? '#009EA4' : undefined
