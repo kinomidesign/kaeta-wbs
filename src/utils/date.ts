@@ -1,7 +1,5 @@
 import {
   TIMELINE_DAYS,
-  TIMELINE_BASE_DATE,
-  TIMELINE_DAYS_BEFORE,
   getTimelineStartDate
 } from '@/constants'
 

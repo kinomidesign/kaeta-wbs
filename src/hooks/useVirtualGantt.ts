@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { DAY_WIDTH, TOTAL_TIMELINE_DAYS } from '@/constants'
+import { DAY_WIDTH, TOTAL_TIMELINE_DAYS, getTimelineStartDate } from '@/constants'
 import { getDateFromIndex, getYearStartIndex, getTodayIndex } from '@/utils/date'
 import type { CurrentViewDate } from '@/types'
 
@@ -57,9 +57,11 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
   // 指定した日付（YYYY-MM-DD形式）へスクロール
   const scrollToDate = useCallback((dateString: string) => {
     const targetDate = new Date(dateString)
-    const baseDate = new Date('2024-01-01') // TIMELINE_BASE_DATE - TIMELINE_DAYS_BEFORE
+    const baseDate = getTimelineStartDate()
     const index = Math.ceil((targetDate.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
-    columnVirtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' })
+    // インデックスが範囲内かチェック
+    const clampedIndex = Math.max(0, Math.min(TOTAL_TIMELINE_DAYS - 1, index))
+    columnVirtualizer.scrollToIndex(clampedIndex, { align: 'center', behavior: 'smooth' })
   }, [columnVirtualizer])
 
   // 今日へスクロール

@@ -78,7 +78,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
           onDrop(e, task, position)
         }}
         onClick={() => onTaskClick(task)}
-        className={`group/task px-4 py-2 min-h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
+        className={`group/task px-4 h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
           ${selectedTaskId === task.id ? 'bg-blue-50' : ''}
           ${isDragging ? 'opacity-50 bg-gray-100' : ''}
         `}
