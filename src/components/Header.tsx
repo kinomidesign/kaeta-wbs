@@ -32,8 +32,6 @@ export const Header: React.FC<HeaderProps> = ({
   onScrollToYear,
   currentViewDate
 }) => {
-  const currentYear = new Date().getFullYear()
-  const nextYear = currentYear + 1
   return (
     <div className="bg-dashboard-card border-b border-dashboard-border px-6 py-4 sticky top-0 z-30">
       <div className="flex items-center justify-between mb-4">
@@ -71,23 +69,23 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-2">
           <span className="text-sm text-dashboard-text-muted">表示中:</span>
           <span className="text-sm font-medium text-dashboard-text-main">
-            {currentViewDate ? `${currentViewDate.year}年${currentViewDate.month}月` : `${currentYear}年`}
+            {currentViewDate ? `${currentViewDate.year}年${currentViewDate.month}月` : `${new Date().getFullYear()}年`}
           </span>
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => onScrollToYear(currentYear)}
+            onClick={() => onScrollToYear(-1)}
             className="px-2 py-1 text-xs rounded border border-dashboard-border hover:bg-gray-50 transition-colors"
-            title={`${currentYear}年へ移動`}
+            title="1年前へ移動"
           >
-            今年
+            ◀ 前年
           </button>
           <button
-            onClick={() => onScrollToYear(nextYear)}
+            onClick={() => onScrollToYear(1)}
             className="px-2 py-1 text-xs rounded border border-dashboard-border hover:bg-gray-50 transition-colors"
-            title={`${nextYear}年へ移動`}
+            title="1年後へ移動"
           >
-            来年
+            来年 ▶
           </button>
         </div>
         <div className="flex items-center gap-2">

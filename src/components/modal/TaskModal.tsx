@@ -210,20 +210,35 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
             {/* 期間選択 */}
             <div>
-              <label className="block text-sm font-medium text-dashboard-text-muted mb-2">期間 *</label>
+              <label className="block text-sm font-medium text-dashboard-text-muted mb-2">期間（任意）</label>
               <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowDatePicker(!showDatePicker)}
-                  className="w-full border border-dashboard-border rounded-md px-3 py-2 text-left flex justify-between items-center"
-                >
-                  <span className={editingTask.start_date ? 'text-dashboard-text-main' : 'text-dashboard-text-muted'}>
-                    {editingTask.start_date && editingTask.end_date
-                      ? `${editingTask.start_date} 〜 ${editingTask.end_date}`
-                      : '日付を選択してください'}
-                  </span>
-                  <span>📅</span>
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDatePicker(!showDatePicker)}
+                    className="flex-1 border border-dashboard-border rounded-md px-3 py-2 text-left flex justify-between items-center"
+                  >
+                    <span className={editingTask.start_date ? 'text-dashboard-text-main' : 'text-dashboard-text-muted'}>
+                      {editingTask.start_date && editingTask.end_date
+                        ? `${editingTask.start_date} 〜 ${editingTask.end_date}`
+                        : '日付を選択してください（未設定可）'}
+                    </span>
+                    <span>📅</span>
+                  </button>
+                  {editingTask.start_date && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateRange(undefined)
+                        setEditingTask(prev => ({ ...prev, start_date: '', end_date: '' }))
+                      }}
+                      className="px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-md border border-dashboard-border"
+                      title="日付をクリア"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
 
                 {showDatePicker && (
                   <div className="absolute z-50 mt-1 bg-dashboard-card rounded-md shadow-lg border border-dashboard-border p-2">
@@ -294,7 +309,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </button>
               <button
                 onClick={onSave}
-                disabled={!editingTask.name || !editingTask.start_date || !editingTask.end_date || saving}
+                disabled={!editingTask.name || saving}
                 className="bg-dashboard-primary text-white px-6 py-2 rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? '保存中...' : mode === 'add' ? '追加する' : '保存する'}

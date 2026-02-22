@@ -6,23 +6,29 @@ import type { NewTaskDragState } from '@/types'
 interface UseNewTaskDragOptions {
   ganttRef: React.RefObject<HTMLDivElement>
   onCreateTask: (phase: string, category: string, startDate: string, endDate: string) => void
+  onUpdateTaskDate?: (taskId: number, startDate: string, endDate: string) => void
 }
 
-const initialState: NewTaskDragState = {
+interface ExtendedDragState extends NewTaskDragState {
+  taskId: number | null  // 既存タスクへの日付設定時に使用
+}
+
+const initialState: ExtendedDragState = {
   isActive: false,
   startX: 0,
   currentX: 0,
   startIndex: 0,
   currentIndex: 0,
   phase: '',
-  category: ''
+  category: '',
+  taskId: null
 }
 
-export const useNewTaskDrag = ({ ganttRef, onCreateTask }: UseNewTaskDragOptions) => {
-  const [dragState, setDragState] = useState<NewTaskDragState>(initialState)
+export const useNewTaskDrag = ({ ganttRef, onCreateTask, onUpdateTaskDate }: UseNewTaskDragOptions) => {
+  const [dragState, setDragState] = useState<ExtendedDragState>(initialState)
   const isDraggingRef = useRef(false)
 
-  // 空白エリアでのドラッグ開始
+  // 空白エリアでのドラッグ開始（新規タスク作成用）
   const handleEmptyAreaDragStart = useCallback((
     e: React.MouseEvent,
     phase: string,
@@ -43,7 +49,35 @@ export const useNewTaskDrag = ({ ganttRef, onCreateTask }: UseNewTaskDragOptions
       startIndex: index,
       currentIndex: index,
       phase,
-      category
+      category,
+      taskId: null
+    })
+  }, [ganttRef])
+
+  // 既存タスク（日付未設定）へのドラッグ開始
+  const handleTaskDateDragStart = useCallback((
+    e: React.MouseEvent,
+    taskId: number,
+    phase: string,
+    category: string
+  ) => {
+    if (!ganttRef.current) return
+
+    const rect = ganttRef.current.getBoundingClientRect()
+    const scrollLeft = ganttRef.current.scrollLeft
+    const x = e.clientX - rect.left + scrollLeft
+    const index = Math.floor(x / DAY_WIDTH)
+
+    isDraggingRef.current = true
+    setDragState({
+      isActive: true,
+      startX: x,
+      currentX: x,
+      startIndex: index,
+      currentIndex: index,
+      phase,
+      category,
+      taskId
     })
   }, [ganttRef])
 
@@ -76,11 +110,17 @@ export const useNewTaskDrag = ({ ganttRef, onCreateTask }: UseNewTaskDragOptions
       const startDate = formatDateString(getDateFromIndex(startIdx))
       const endDate = formatDateString(getDateFromIndex(endIdx))
 
-      onCreateTask(dragState.phase, dragState.category, startDate, endDate)
+      if (dragState.taskId && onUpdateTaskDate) {
+        // 既存タスクへの日付設定
+        onUpdateTaskDate(dragState.taskId, startDate, endDate)
+      } else {
+        // 新規タスク作成
+        onCreateTask(dragState.phase, dragState.category, startDate, endDate)
+      }
     }
 
     setDragState(initialState)
-  }, [dragState, onCreateTask])
+  }, [dragState, onCreateTask, onUpdateTaskDate])
 
   // ドラッグ中の新規タスクプレビュー情報を取得
   const getPreviewInfo = useCallback(() => {
@@ -101,9 +141,11 @@ export const useNewTaskDrag = ({ ganttRef, onCreateTask }: UseNewTaskDragOptions
   return {
     newTaskDragState: dragState,
     handleEmptyAreaDragStart,
+    handleTaskDateDragStart,
     handleNewTaskDragMove: handleDragMove,
     handleNewTaskDragEnd: handleDragEnd,
     getPreviewInfo,
-    isNewTaskDragging: dragState.isActive
+    isNewTaskDragging: dragState.isActive,
+    draggingTaskId: dragState.taskId
   }
 }

@@ -13,9 +13,9 @@ export const GanttDateHeader: React.FC<GanttDateHeaderProps> = ({
   totalSize
 }) => {
   return (
-    <div className="sticky top-0 bg-dashboard-card z-20 border-b border-dashboard-border">
+    <div className="sticky top-0 bg-white z-20 border-b border-dashboard-border">
       <div
-        className="flex relative"
+        className="flex relative bg-white"
         style={{ width: totalSize, height: 28 }}
       >
         {virtualItems.map((virtualItem) => {
@@ -29,7 +29,7 @@ export const GanttDateHeader: React.FC<GanttDateHeaderProps> = ({
           return (
             <div
               key={virtualItem.key}
-              className={`absolute top-0 text-center border-r border-gray-100 ${weekend ? 'bg-gray-50' : ''}`}
+              className={`absolute top-0 text-center border-r border-gray-100 ${weekend ? 'bg-gray-100' : 'bg-white'}`}
               style={{
                 left: virtualItem.start,
                 width: DAY_WIDTH,
@@ -38,7 +38,7 @@ export const GanttDateHeader: React.FC<GanttDateHeaderProps> = ({
             >
               {showLabel ? (
                 <div
-                  className={`text-xs font-medium py-1 border-b bg-gray-50 h-full flex items-center justify-center ${today ? 'border-b-4' : 'border-dashboard-border'}`}
+                  className={`text-xs font-medium py-1 border-b h-full flex items-center justify-center ${weekend ? 'bg-gray-100' : 'bg-gray-50'} ${today ? 'border-b-4' : 'border-dashboard-border'}`}
                   style={{
                     color: '#009EA4',
                     borderBottomColor: today ? '#009EA4' : undefined
@@ -48,7 +48,7 @@ export const GanttDateHeader: React.FC<GanttDateHeaderProps> = ({
                 </div>
               ) : (
                 <div
-                  className={`text-xs py-1 h-full flex items-center justify-center ${today ? 'border-b-4 font-medium' : 'border-b border-dashboard-border'}`}
+                  className={`text-xs py-1 h-full flex items-center justify-center ${weekend ? 'bg-gray-100' : 'bg-white'} ${today ? 'border-b-4 font-medium' : 'border-b border-dashboard-border'}`}
                   style={{
                     color: today ? '#009EA4' : undefined,
                     borderBottomColor: today ? '#009EA4' : undefined

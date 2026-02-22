@@ -149,16 +149,23 @@ export default function KaetaWBS() {
     setShowTaskModal(true)
   }, [])
 
+  // 既存タスクへの日付設定
+  const handleUpdateTaskDate = useCallback(async (taskId: number, startDate: string, endDate: string) => {
+    await updateTask(taskId, 'start_date', startDate)
+    await updateTask(taskId, 'end_date', endDate)
+  }, [updateTask])
+
   const {
-    newTaskDragState,
-    handleEmptyAreaDragStart,
+    handleTaskDateDragStart,
     handleNewTaskDragMove,
     handleNewTaskDragEnd,
     getPreviewInfo,
-    isNewTaskDragging
+    isNewTaskDragging,
+    draggingTaskId
   } = useNewTaskDrag({
     ganttRef: ganttRef as React.RefObject<HTMLDivElement>,
-    onCreateTask: handleCreateTaskFromDrag
+    onCreateTask: handleCreateTaskFromDrag,
+    onUpdateTaskDate: handleUpdateTaskDate
   })
 
   // モーダル状態
@@ -394,7 +401,7 @@ export default function KaetaWBS() {
         {/* タスクリスト */}
         <div
           ref={taskListRef}
-          className="flex-shrink-0 overflow-y-auto bg-dashboard-card border-r border-dashboard-border"
+          className="flex-shrink-0 overflow-y-auto bg-dashboard-card border-r border-dashboard-border scrollbar-hide"
           style={{ width: tableWidth }}
           onScroll={handleTaskListScroll}
         >
@@ -439,10 +446,10 @@ export default function KaetaWBS() {
                       {/* カテゴリヘッダー */}
                       {category && (
                         <div
-                          className={`sticky top-[68px] z-10 bg-gray-50 px-4 h-7 text-sm font-medium text-dashboard-text-muted flex items-center gap-2 cursor-pointer hover:bg-gray-100 border-b border-dashboard-border ${
+                          className={`sticky top-[68px] z-10 bg-gray-50 h-7 text-sm font-medium text-dashboard-text-muted flex items-center gap-2 cursor-pointer hover:bg-gray-100 border-b border-dashboard-border ${
                             taskDragState.draggingTaskId && taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === category ? 'bg-blue-50' : ''
                           }`}
-                          style={{ marginLeft: '16px' }}
+                          style={{ paddingLeft: '32px', paddingRight: '16px' }}
                           onClick={() => toggleCategoryAccordion(phase, category)}
                           onDragOver={(e) => {
                             e.preventDefault()
@@ -537,31 +544,9 @@ export default function KaetaWBS() {
 
                     return (
                       <div key={`${phase}-${category}`}>
-                        {/* カテゴリ行（空白エリア - ドラッグで新規タスク作成） */}
+                        {/* カテゴリ行（ドラッグ対象外） */}
                         {category && (
-                          <div
-                            className="h-7 border-b border-gray-100 relative cursor-crosshair hover:bg-gray-50"
-                            onMouseDown={(e) => handleEmptyAreaDragStart(e, phase, category)}
-                          >
-                            {/* 新規タスクプレビュー */}
-                            {isNewTaskDragging && newTaskDragState.phase === phase && newTaskDragState.category === category && (() => {
-                              const preview = getPreviewInfo()
-                              if (!preview) return null
-                              return (
-                                <div
-                                  className="absolute top-1 h-5 bg-blue-200 border-2 border-blue-400 rounded opacity-70"
-                                  style={{ left: preview.left, width: preview.width }}
-                                >
-                                  <span className="absolute -top-5 left-0 text-xs bg-gray-800 text-white px-1 rounded">
-                                    {preview.startDate.slice(5)}
-                                  </span>
-                                  <span className="absolute -top-5 right-0 text-xs bg-gray-800 text-white px-1 rounded">
-                                    {preview.endDate.slice(5)}
-                                  </span>
-                                </div>
-                              )
-                            })()}
-                          </div>
+                          <div className="h-7 border-b border-gray-100 bg-gray-50/50" />
                         )}
 
                         {/* タスクバー */}
@@ -579,18 +564,52 @@ export default function KaetaWBS() {
 
                           if (isHidden) return null
 
+                          const hasDate = task.start_date && task.end_date
+
                           return (
                             <div
                               key={task.id}
                               className="h-12 border-b border-gray-100 relative"
                             >
-                              <div className="absolute top-3">
-                                <GanttBar
-                                  task={task}
-                                  onDragStart={handleGanttDragStart}
-                                  isDragging={dragState.taskId === task.id}
-                                />
-                              </div>
+                              {hasDate ? (
+                                <div className="absolute top-3">
+                                  <GanttBar
+                                    task={task}
+                                    onDragStart={handleGanttDragStart}
+                                    isDragging={dragState.taskId === task.id}
+                                  />
+                                </div>
+                              ) : (
+                                /* 日付未設定時：ドラッグで日付を設定可能 */
+                                <div
+                                  className="absolute inset-0 cursor-crosshair hover:bg-blue-50/50 group/empty"
+                                  onMouseDown={(e) => handleTaskDateDragStart(e, task.id, task.phase, task.category)}
+                                >
+                                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center opacity-0 group-hover/empty:opacity-100 transition-opacity pointer-events-none">
+                                    <span className="text-xs text-gray-400 bg-white px-2 py-1 rounded border border-dashed border-gray-300">
+                                      ドラッグで日付を設定
+                                    </span>
+                                  </div>
+                                  {/* ドラッグ中のプレビュー */}
+                                  {isNewTaskDragging && draggingTaskId === task.id && (() => {
+                                    const preview = getPreviewInfo()
+                                    if (!preview) return null
+                                    return (
+                                      <div
+                                        className="absolute top-3 h-6 bg-blue-200 border-2 border-blue-400 rounded opacity-70"
+                                        style={{ left: preview.left, width: preview.width }}
+                                      >
+                                        <span className="absolute -top-5 left-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
+                                          {preview.startDate.slice(5)}
+                                        </span>
+                                        <span className="absolute -top-5 right-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
+                                          {preview.endDate.slice(5)}
+                                        </span>
+                                      </div>
+                                    )
+                                  })()}
+                                </div>
+                              )}
                             </div>
                           )
                         })}

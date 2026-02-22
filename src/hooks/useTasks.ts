@@ -76,7 +76,7 @@ export const useTasks = ({ phases, categories }: UseTasksOptions): UseTasksRetur
     phases: Phase[],
     categories: Category[]
   ): Promise<Task | null> => {
-    if (!editingTask.name || !editingTask.start_date || !editingTask.end_date) return null
+    if (!editingTask.name) return null
 
     // 同じカテゴリ内の最大sort_orderを取得
     const sameCategoryTasks = tasks.filter(
@@ -92,15 +92,20 @@ export const useTasks = ({ phases, categories }: UseTasksOptions): UseTasksRetur
       ? categories.find(c => c.phase_id === selectedPhase.id && c.name === editingTask.category)
       : null
 
+    // 日付が空文字列の場合はnullに変換
+    const taskData = {
+      ...editingTask,
+      start_date: editingTask.start_date || null,
+      end_date: editingTask.end_date || null,
+      category_id: selectedCategory?.id || null,
+      indent_level: editingTask.indent_level || 0,
+      sort_order: maxSortOrder + 1
+    }
+
     setSaving(true)
     const { data, error } = await supabase
       .from('tasks')
-      .insert([{
-        ...editingTask,
-        category_id: selectedCategory?.id || null,
-        indent_level: editingTask.indent_level || 0,
-        sort_order: maxSortOrder + 1
-      }])
+      .insert([taskData])
       .select()
 
     if (error) {
@@ -126,7 +131,7 @@ export const useTasks = ({ phases, categories }: UseTasksOptions): UseTasksRetur
     phases: Phase[],
     categories: Category[]
   ): Promise<boolean> => {
-    if (!editingTask.name || !editingTask.start_date || !editingTask.end_date) return false
+    if (!editingTask.name) return false
 
     // category_idを取得
     const selectedPhase = phases.find(p => p.name === editingTask.phase)
@@ -134,14 +139,19 @@ export const useTasks = ({ phases, categories }: UseTasksOptions): UseTasksRetur
       ? categories.find(c => c.phase_id === selectedPhase.id && c.name === editingTask.category)
       : null
 
+    // 日付が空文字列の場合はnullに変換
+    const taskData = {
+      ...editingTask,
+      start_date: editingTask.start_date || null,
+      end_date: editingTask.end_date || null,
+      category_id: selectedCategory?.id || null,
+      updated_at: new Date().toISOString()
+    }
+
     setSaving(true)
     const { error } = await supabase
       .from('tasks')
-      .update({
-        ...editingTask,
-        category_id: selectedCategory?.id || null,
-        updated_at: new Date().toISOString()
-      })
+      .update(taskData)
       .eq('id', taskId)
 
     if (error) {

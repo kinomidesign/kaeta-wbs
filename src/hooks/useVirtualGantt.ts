@@ -48,26 +48,42 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
     })
   }, [])
 
-  // 指定した年の1月1日へスクロール
-  const scrollToYear = useCallback((year: number) => {
-    const index = getYearStartIndex(year)
-    columnVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' })
+  // 現在表示中の日付から相対的に年移動（瞬時切り替え）
+  const scrollToYear = useCallback((deltaYears: number) => {
+    if (!ganttRef.current) return
+
+    // 現在表示中の左端の日付を取得
+    const scrollLeft = ganttRef.current.scrollLeft
+    const currentIndex = Math.floor(scrollLeft / DAY_WIDTH)
+    const currentDate = getDateFromIndex(currentIndex)
+
+    // deltaYears年後/前の同じ月日を計算
+    const targetDate = new Date(currentDate)
+    targetDate.setFullYear(targetDate.getFullYear() + deltaYears)
+
+    // ターゲット日付のインデックスを計算
+    const baseDate = getTimelineStartDate()
+    const targetIndex = Math.ceil((targetDate.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
+    const clampedIndex = Math.max(0, Math.min(TOTAL_TIMELINE_DAYS - 1, targetIndex))
+
+    // 瞬時に切り替え
+    columnVirtualizer.scrollToIndex(clampedIndex, { align: 'start', behavior: 'auto' })
   }, [columnVirtualizer])
 
-  // 指定した日付（YYYY-MM-DD形式）へスクロール
+  // 指定した日付（YYYY-MM-DD形式）へスクロール（左端に配置）
   const scrollToDate = useCallback((dateString: string) => {
     const targetDate = new Date(dateString)
     const baseDate = getTimelineStartDate()
     const index = Math.ceil((targetDate.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
     // インデックスが範囲内かチェック
     const clampedIndex = Math.max(0, Math.min(TOTAL_TIMELINE_DAYS - 1, index))
-    columnVirtualizer.scrollToIndex(clampedIndex, { align: 'center', behavior: 'smooth' })
+    columnVirtualizer.scrollToIndex(clampedIndex, { align: 'start', behavior: 'smooth' })
   }, [columnVirtualizer])
 
-  // 今日へスクロール
+  // 今日へスクロール（左端に配置）
   const scrollToToday = useCallback(() => {
     const index = getTodayIndex()
-    columnVirtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' })
+    columnVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' })
   }, [columnVirtualizer])
 
   // 初期マウント時に今日の位置へスクロール
