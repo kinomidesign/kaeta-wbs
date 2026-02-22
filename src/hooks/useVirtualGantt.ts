@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { DAY_WIDTH, TOTAL_TIMELINE_DAYS, getTimelineStartDate } from '@/constants'
 import { getDateFromIndex, getTodayIndex, parseDateString } from '@/utils/date'
@@ -12,9 +12,18 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
   const { initialScrollToToday = true } = options
 
   const ganttRef = useRef<HTMLDivElement>(null)
-  const [currentViewDate, setCurrentViewDate] = useState<CurrentViewDate>({
-    year: new Date().getFullYear(),
-    month: new Date().getMonth() + 1
+
+  // 今日のインデックスを計算（初期スクロール位置用）
+  const todayIndex = getTodayIndex()
+  const initialOffset = initialScrollToToday ? todayIndex * DAY_WIDTH : 0
+
+  const [currentViewDate, setCurrentViewDate] = useState<CurrentViewDate>(() => {
+    // 初期値を今日の日付で設定
+    const today = new Date()
+    return {
+      year: today.getFullYear(),
+      month: today.getMonth() + 1
+    }
   })
 
   // スクロール位置監視用のthrottle
@@ -27,6 +36,7 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
     estimateSize: () => DAY_WIDTH,
     horizontal: true,
     overscan: 14, // 前後14日分（2週間）を余分にレンダリング
+    initialOffset, // 今日の位置から開始
   })
 
   // スクロール位置に応じて現在表示中の日付を更新
@@ -63,23 +73,6 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
     const index = getTodayIndex()
     columnVirtualizer.scrollToIndex(index, { align: 'start', behavior: 'smooth' })
   }, [columnVirtualizer])
-
-  // 初期マウント時に今日の位置へスクロール（先頭に配置）
-  useEffect(() => {
-    if (initialScrollToToday && ganttRef.current) {
-      // 直接scrollLeftを設定（virtualizerの初期化を待たない）
-      const todayIndex = getTodayIndex()
-      const scrollPosition = todayIndex * DAY_WIDTH
-      ganttRef.current.scrollLeft = scrollPosition
-
-      // currentViewDateを今日の日付で初期化
-      const today = new Date()
-      setCurrentViewDate({
-        year: today.getFullYear(),
-        month: today.getMonth() + 1
-      })
-    }
-  }, [initialScrollToToday])
 
   return {
     ganttRef,
