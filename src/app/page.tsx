@@ -1414,7 +1414,7 @@ export default function KaetaWBS() {
                                     handleTaskDrop(e, task, position)
                                   }}
                                   onClick={() => openTaskModal('edit', task)}
-                                  className={`group/task px-4 py-2 min-h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
+                                  className={`group/task px-4 h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
                                     ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}
                                     ${isDragging ? 'opacity-50 bg-gray-100' : ''}
                                   `}
@@ -1467,7 +1467,7 @@ export default function KaetaWBS() {
                                       )}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium text-dashboard-text-main break-words">{task.name}</p>
+                                      <p className="text-sm font-medium text-dashboard-text-main truncate" title={task.name}>{task.name}</p>
                                     </div>
                                   </div>
 
