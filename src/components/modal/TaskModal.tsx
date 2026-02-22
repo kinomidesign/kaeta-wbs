@@ -3,11 +3,18 @@ import { DayPicker, DateRange } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
 import * as dateFnsLocale from 'date-fns/locale'
 import type { Task, Phase, Category, EditingTask } from '@/types'
-import { OWNERS, PRIORITIES, STATUSES } from '@/constants'
-import { getStatusColor, getOwnerColor } from '@/utils/style'
+import { OWNERS, STATUSES } from '@/constants'
+import { getStatusColor } from '@/utils/style'
 import { formatDateString } from '@/utils/date'
 
 const ja = dateFnsLocale.ja
+
+// 編集アイコン（鉛筆）
+const EditIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+  </svg>
+)
 
 interface TaskModalProps {
   mode: 'add' | 'edit'
@@ -46,6 +53,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     return undefined
   })
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [showOwnerDropdown, setShowOwnerDropdown] = useState(false)
 
   const handleDateRangeSelect = (range: DateRange | undefined) => {
     setDateRange(range)
@@ -63,46 +71,141 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     ? categories.filter(c => c.phase_id === selectedPhase.id).sort((a, b) => a.sort_order - b.sort_order)
     : []
 
-  const isCategoryNotInDB = editingTask.category && !categories.find(c => {
-    return selectedPhase && c.phase_id === selectedPhase.id && c.name === editingTask.category
-  })
-
   return (
     <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-dashboard-card rounded-[16px] w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-lg" onClick={e => e.stopPropagation()}>
         <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-dashboard-text-main">
+          {/* ヘッダー */}
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-dashboard-text-main">
               {mode === 'add' ? 'タスクを追加' : 'タスクを編集'}
             </h2>
-            <button onClick={onClose} className="text-dashboard-text-muted hover:text-dashboard-text-main text-2xl">×</button>
+            <button onClick={onClose} className="text-dashboard-text-muted hover:text-dashboard-text-main text-xl leading-none">×</button>
           </div>
 
-          <div className="space-y-4">
-            {/* タスク名 */}
+          <div className="space-y-6">
+            {/* タスク名 - 枠線なし、大きいプレースホルダー */}
             <div>
-              <label className="block text-sm font-medium text-dashboard-text-muted mb-1">タスク名 *</label>
               <input
                 type="text"
                 value={editingTask.name}
                 onChange={(e) => setEditingTask({ ...editingTask, name: e.target.value })}
-                className="w-full border border-dashboard-border rounded-md px-3 py-2"
-                placeholder="タスク名を入力"
+                className="w-full text-2xl font-medium text-dashboard-text-main placeholder:text-dashboard-text-muted/60 bg-transparent border-none outline-none focus:ring-0"
+                placeholder="タスク名を入力..."
+                autoFocus
               />
+            </div>
+
+            {/* 日付・担当者・ステータス - 3列グリッド */}
+            <div className="grid grid-cols-3 gap-6">
+              {/* 日付 */}
+              <div className="relative">
+                <label className="block text-sm text-dashboard-text-muted mb-1">日付</label>
+                <button
+                  type="button"
+                  onClick={() => setShowDatePicker(!showDatePicker)}
+                  className="text-sm text-dashboard-text-main hover:text-dashboard-text-muted text-left"
+                >
+                  {editingTask.start_date && editingTask.end_date
+                    ? `${editingTask.start_date} ~ ${editingTask.end_date}`
+                    : '未設定'}
+                </button>
+                {showDatePicker && (
+                  <div className="absolute z-50 mt-1 left-0 bg-dashboard-card rounded-lg shadow-lg border border-dashboard-border p-2">
+                    <DayPicker
+                      mode="range"
+                      selected={dateRange}
+                      onSelect={handleDateRangeSelect}
+                      locale={ja}
+                      numberOfMonths={1}
+                      className="text-sm"
+                    />
+                    <div className="flex justify-between mt-2 border-t border-dashboard-border pt-2">
+                      {editingTask.start_date && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDateRange(undefined)
+                            setEditingTask(prev => ({ ...prev, start_date: '', end_date: '' }))
+                          }}
+                          className="text-sm text-red-500 hover:text-red-700"
+                        >
+                          クリア
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowDatePicker(false)}
+                        className="text-sm text-dashboard-text-muted hover:text-dashboard-text-main ml-auto"
+                      >
+                        閉じる
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 担当者 */}
+              <div className="relative">
+                <label className="block text-sm text-dashboard-text-muted mb-1">担当者</label>
+                <button
+                  type="button"
+                  onClick={() => setShowOwnerDropdown(!showOwnerDropdown)}
+                  className="text-sm text-dashboard-text-main hover:text-dashboard-text-muted text-left"
+                >
+                  {editingTask.owner || '未入力'}
+                </button>
+                {showOwnerDropdown && (
+                  <div className="absolute z-50 mt-1 left-0 bg-dashboard-card rounded-lg shadow-lg border border-dashboard-border py-1 min-w-[120px]">
+                    {OWNERS.map(o => (
+                      <button
+                        key={o}
+                        type="button"
+                        onClick={() => {
+                          setEditingTask({ ...editingTask, owner: o })
+                          setShowOwnerDropdown(false)
+                        }}
+                        className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 ${
+                          editingTask.owner === o ? 'bg-gray-50 font-medium' : ''
+                        }`}
+                      >
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ステータス */}
+              <div>
+                <label className="block text-sm text-dashboard-text-muted mb-1">ステータス</label>
+                <span className={`inline-block text-sm px-2 py-0.5 rounded-full ${getStatusColor(editingTask.status)}`}>
+                  {editingTask.status}
+                </span>
+              </div>
             </div>
 
             {/* フェーズ */}
             <div>
-              <label className="block text-sm font-medium text-dashboard-text-muted mb-2">フェーズ</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm text-dashboard-text-muted">フェーズ</label>
+                <button
+                  type="button"
+                  className="text-dashboard-text-muted hover:text-dashboard-text-main"
+                  title="フェーズを編集"
+                >
+                  <EditIcon />
+                </button>
+              </div>
               <div className="flex gap-2 flex-wrap">
                 {phaseNames.map(p => (
                   <button
                     key={p}
                     type="button"
-                    onClick={() => setEditingTask({ ...editingTask, phase: p })}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    onClick={() => setEditingTask({ ...editingTask, phase: p, category: '' })}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
                       editingTask.phase === p
-                        ? 'bg-dashboard-primary text-white shadow-md'
+                        ? 'bg-dashboard-primary text-white'
                         : 'bg-gray-100 text-dashboard-text-muted hover:bg-gray-200'
                     }`}
                   >
@@ -112,210 +215,77 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             </div>
 
-            {/* カテゴリ */}
+            {/* カテゴリ - ピルボタン形式 */}
             <div>
-              <label className="block text-sm font-medium text-dashboard-text-muted mb-1">カテゴリ</label>
-              <div className="flex gap-2">
-                <select
-                  value={editingTask.category}
-                  onChange={(e) => setEditingTask({ ...editingTask, category: e.target.value })}
-                  className="flex-1 border border-dashboard-border rounded-md px-3 py-2"
-                >
-                  <option value="">カテゴリを選択</option>
-                  {phaseCategories.map(cat => (
-                    <option key={cat.id} value={cat.name}>{cat.name}</option>
-                  ))}
-                </select>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm text-dashboard-text-muted">カテゴリ</label>
                 <button
                   type="button"
                   onClick={() => selectedPhase && onOpenCategoryModal(selectedPhase.id)}
-                  className="px-3 py-2 text-sm text-accent-blue-text hover:bg-gray-100 rounded-md border border-dashboard-border whitespace-nowrap"
-                  title="カテゴリを追加・編集"
+                  className="text-dashboard-text-muted hover:text-dashboard-text-main"
+                  title="カテゴリを編集"
                 >
-                  管理
+                  <EditIcon />
                 </button>
               </div>
-              {isCategoryNotInDB && (
-                <p className="text-xs text-yellow-600 mt-1">
-                  ※ このカテゴリはまだDBに登録されていません。「管理」からカテゴリを追加してください。
-                </p>
-              )}
-            </div>
-
-            {/* 担当者・優先度 */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-dashboard-text-muted mb-2">担当者</label>
-                <div className="flex gap-2 flex-wrap">
-                  {OWNERS.map(o => (
+              <div className="flex gap-2 flex-wrap">
+                {phaseCategories.length > 0 ? (
+                  phaseCategories.map(cat => (
                     <button
-                      key={o}
+                      key={cat.id}
                       type="button"
-                      onClick={() => setEditingTask({ ...editingTask, owner: o })}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium border-2 transition-all ${
-                        editingTask.owner === o
-                          ? `${getOwnerColor(o)} border-current ring-2 ring-offset-1`
-                          : 'bg-gray-50 text-dashboard-text-muted border-gray-200 hover:bg-gray-100'
-                      }`}
-                    >
-                      {o}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-dashboard-text-muted mb-2">優先度</label>
-                <div className="flex gap-2 flex-wrap">
-                  {PRIORITIES.map(p => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setEditingTask({ ...editingTask, priority: p })}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium border-2 transition-all ${
-                        editingTask.priority === p
-                          ? p === '必須' ? 'bg-red-100 text-red-700 border-red-300 ring-2 ring-red-200 ring-offset-1'
-                          : p === '推奨' ? 'bg-yellow-100 text-yellow-700 border-yellow-300 ring-2 ring-yellow-200 ring-offset-1'
-                          : 'bg-gray-100 text-dashboard-text-main border-gray-300 ring-2 ring-gray-200 ring-offset-1'
-                          : 'bg-gray-50 text-dashboard-text-muted border-gray-200 hover:bg-gray-100'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* ステータス（編集時のみ） */}
-            {mode === 'edit' && (
-              <div>
-                <label className="block text-sm font-medium text-dashboard-text-muted mb-2">ステータス</label>
-                <div className="flex gap-2 flex-wrap">
-                  {STATUSES.map(s => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setEditingTask({ ...editingTask, status: s })}
+                      onClick={() => setEditingTask({ ...editingTask, category: cat.name })}
                       className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                        editingTask.status === s
-                          ? getStatusColor(s)
-                          : 'bg-gray-50 text-dashboard-text-muted hover:bg-gray-100'
+                        editingTask.category === cat.name
+                          ? 'bg-gray-200 text-dashboard-text-main'
+                          : 'bg-gray-100 text-dashboard-text-muted hover:bg-gray-200'
                       }`}
                     >
-                      {s}
+                      {cat.name}
                     </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 期間選択 */}
-            <div>
-              <label className="block text-sm font-medium text-dashboard-text-muted mb-2">期間（任意）</label>
-              <div className="relative">
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowDatePicker(!showDatePicker)}
-                    className="flex-1 border border-dashboard-border rounded-md px-3 py-2 text-left flex justify-between items-center"
-                  >
-                    <span className={editingTask.start_date ? 'text-dashboard-text-main' : 'text-dashboard-text-muted'}>
-                      {editingTask.start_date && editingTask.end_date
-                        ? `${editingTask.start_date} 〜 ${editingTask.end_date}`
-                        : '日付を選択してください（未設定可）'}
-                    </span>
-                    <span>📅</span>
-                  </button>
-                  {editingTask.start_date && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDateRange(undefined)
-                        setEditingTask(prev => ({ ...prev, start_date: '', end_date: '' }))
-                      }}
-                      className="px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-md border border-dashboard-border"
-                      title="日付をクリア"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-
-                {showDatePicker && (
-                  <div className="absolute z-50 mt-1 bg-dashboard-card rounded-md shadow-lg border border-dashboard-border p-2">
-                    <DayPicker
-                      mode="range"
-                      selected={dateRange}
-                      onSelect={handleDateRangeSelect}
-                      locale={ja}
-                      numberOfMonths={1}
-                      className="text-sm"
-                    />
-                    <div className="flex justify-end mt-2 border-t border-dashboard-border pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowDatePicker(false)}
-                        className="text-sm text-accent-blue-text hover:underline"
-                      >
-                        閉じる
-                      </button>
-                    </div>
-                  </div>
+                  ))
+                ) : (
+                  <span className="text-sm text-dashboard-text-muted">カテゴリがありません</span>
                 )}
               </div>
             </div>
 
-            {/* 工数 */}
+            {/* メモ - 枠線なし */}
             <div>
-              <label className="block text-sm font-medium text-dashboard-text-muted mb-1">工数</label>
-              <input
-                type="text"
-                value={editingTask.effort}
-                onChange={(e) => setEditingTask({ ...editingTask, effort: e.target.value })}
-                className="w-full border border-dashboard-border rounded-md px-3 py-2"
-                placeholder="例: 2-3時間、要見積もり"
-              />
-            </div>
-
-            {/* メモ */}
-            <div>
-              <label className="block text-sm font-medium text-dashboard-text-muted mb-1">メモ</label>
+              <label className="block text-sm text-dashboard-text-muted mb-1">メモ</label>
               <textarea
                 value={editingTask.note}
                 onChange={(e) => setEditingTask({ ...editingTask, note: e.target.value })}
-                className="w-full border border-dashboard-border rounded-md px-3 py-2 h-20"
+                className="w-full bg-transparent border-none outline-none focus:ring-0 text-sm text-dashboard-text-main placeholder:text-dashboard-text-muted/60 resize-none"
                 placeholder="補足情報を入力..."
+                rows={2}
               />
             </div>
           </div>
 
           {/* フッター */}
-          <div className="flex justify-between mt-6 pt-4 border-t border-dashboard-border">
-            {mode === 'edit' && onDelete ? (
+          <div className="flex justify-end items-center gap-3 mt-6 pt-4">
+            {mode === 'edit' && onDelete && (
               <button
                 onClick={onDelete}
-                className="text-red-500 hover:text-red-700 text-sm"
+                className="text-red-500 hover:text-red-700 text-sm mr-auto"
               >
                 タスクを削除
               </button>
-            ) : (
-              <div></div>
             )}
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-dashboard-text-muted hover:text-dashboard-text-main"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={onSave}
-                disabled={!editingTask.name || saving}
-                className="bg-dashboard-primary text-white px-6 py-2 rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? '保存中...' : mode === 'add' ? '追加する' : '保存する'}
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-dashboard-text-muted hover:text-dashboard-text-main border border-dashboard-border rounded-md"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={onSave}
+              disabled={!editingTask.name || saving}
+              className="bg-dashboard-primary text-white px-6 py-2 text-sm rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? '保存中...' : mode === 'add' ? '追加する' : '保存する'}
+            </button>
           </div>
         </div>
       </div>
