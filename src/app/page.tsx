@@ -404,7 +404,7 @@ export default function KaetaWBS() {
           onScroll={handleTaskListScroll}
         >
           {/* ヘッダー */}
-          <div className="sticky top-0 bg-dashboard-card z-20 border-b border-dashboard-border px-4 h-7 flex items-center">
+          <div className="sticky top-0 bg-dashboard-card z-20 border-b border-dashboard-border px-4 h-11 flex items-center">
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-dashboard-text-muted w-full">
               <div className="col-span-5">タスク名</div>
               <div className="col-span-2 text-center">担当</div>
