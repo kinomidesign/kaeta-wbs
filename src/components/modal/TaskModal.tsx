@@ -30,6 +30,7 @@ interface TaskModalProps {
   onSave: () => void
   onDelete?: () => void
   onOpenCategoryModal: (phaseId: number) => void
+  onOpenPhaseModal: () => void
 }
 
 export const TaskModal: React.FC<TaskModalProps> = ({
@@ -43,7 +44,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   onClose,
   onSave,
   onDelete,
-  onOpenCategoryModal
+  onOpenCategoryModal,
+  onOpenPhaseModal
 }) => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     if (editingTask.start_date && editingTask.end_date) {
@@ -252,6 +254,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <label className="text-sm text-dashboard-text-muted">フェーズ</label>
                 <button
                   type="button"
+                  onClick={onOpenPhaseModal}
                   className="text-dashboard-text-muted hover:text-dashboard-text-main"
                   title="フェーズを編集"
                 >

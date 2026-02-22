@@ -651,6 +651,7 @@ export default function KaetaWBS() {
             setSelectedPhaseForCategory(phaseId)
             setShowCategoryModal(true)
           }}
+          onOpenPhaseModal={() => setShowPhaseModal(true)}
         />
       )}
 
