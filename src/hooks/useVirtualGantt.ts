@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { DAY_WIDTH, TOTAL_TIMELINE_DAYS, getTimelineStartDate } from '@/constants'
-import { getDateFromIndex, getYearStartIndex, getTodayIndex } from '@/utils/date'
+import { getDateFromIndex, getYearStartIndex, getTodayIndex, parseDateString } from '@/utils/date'
 import type { CurrentViewDate } from '@/types'
 
 interface UseVirtualGanttOptions {
@@ -72,7 +72,7 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
 
   // 指定した日付（YYYY-MM-DD形式）へスクロール（左端に配置）
   const scrollToDate = useCallback((dateString: string) => {
-    const targetDate = new Date(dateString)
+    const targetDate = parseDateString(dateString)
     const baseDate = getTimelineStartDate()
     const index = Math.ceil((targetDate.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
     // インデックスが範囲内かチェック
