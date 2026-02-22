@@ -510,7 +510,7 @@ export default function KaetaWBS() {
 
         {/* リサイズハンドル */}
         <div
-          className={`w-1 cursor-col-resize hover:bg-accent-blue flex-shrink-0 transition-colors ${isResizing ? 'bg-accent-blue' : 'bg-gray-200'}`}
+          className={`w-1 cursor-col-resize hover:rgb(0, 158, 164) flex-shrink-0 transition-colors ${isResizing ? 'bg-accent-blue' : 'bg-gray-200'}`}
           onMouseDown={handleResizeStart}
         />
 
