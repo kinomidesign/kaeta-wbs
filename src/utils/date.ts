@@ -154,7 +154,10 @@ export const getYearStartIndex = (year: number): number => {
  * 今日のタイムラインインデックスを取得
  */
 export const getTodayIndex = (): number => {
+  // 時刻を除いた日付のみで計算（タイムゾーンの影響を排除）
   const today = new Date()
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   const baseDate = getTimelineStartDate()
-  return Math.ceil((today.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
+  const baseDateOnly = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate())
+  return Math.round((todayDate.getTime() - baseDateOnly.getTime()) / (1000 * 60 * 60 * 24))
 }

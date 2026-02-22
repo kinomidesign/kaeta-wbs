@@ -39,7 +39,7 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
     initialOffset, // 今日の位置から開始
   })
 
-  // スクロール位置に応じて現在表示中の日付を更新
+  // スクロール位置に応じて現在表示中の日付を更新（画面左端の日付）
   const updateCurrentViewDate = useCallback(() => {
     const now = Date.now()
     // 100ms間隔でスロットル
@@ -49,12 +49,12 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
     if (!ganttRef.current) return
 
     const scrollLeft = ganttRef.current.scrollLeft
-    const centerIndex = Math.floor((scrollLeft + ganttRef.current.clientWidth / 2) / DAY_WIDTH)
-    const centerDate = getDateFromIndex(centerIndex)
+    const leftIndex = Math.floor(scrollLeft / DAY_WIDTH)
+    const leftDate = getDateFromIndex(leftIndex)
 
     setCurrentViewDate({
-      year: centerDate.getFullYear(),
-      month: centerDate.getMonth() + 1
+      year: leftDate.getFullYear(),
+      month: leftDate.getMonth() + 1
     })
   }, [])
 
