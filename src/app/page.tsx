@@ -63,10 +63,10 @@ export default function KaetaWBS() {
   const [taskModalMode, setTaskModalMode] = useState<'add' | 'edit'>('add')
   const [showPhaseModal, setShowPhaseModal] = useState(false)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
-  const [viewStartDate, setViewStartDate] = useState(() => {
-    // デフォルトは今日の日付
-    const today = new Date()
-    return today.toISOString().split('T')[0]
+  // タイムラインの固定開始日（今年1月1日から365日分をレンダリング）
+  const [viewStartDate] = useState(() => {
+    const year = new Date().getFullYear()
+    return `${year}-01-01`
   })
   const [filterPhase, setFilterPhase] = useState('all')
   const [filterOwner, setFilterOwner] = useState('all')
@@ -163,11 +163,21 @@ export default function KaetaWBS() {
   const taskListRef = useRef<HTMLDivElement>(null)
   const mainScrollRef = useRef<HTMLDivElement>(null)
 
-  // 日付クリックでガントチャートの表示開始日を変更
+  // 指定した日付へスクロール
+  const scrollToDate = (targetDate: string, smooth: boolean = true) => {
+    if (!ganttRef.current) return
+    const dayOffset = getDaysFromStart(targetDate, viewStartDate)
+    const scrollPosition = dayOffset * 32 // DAY_WIDTH = 32px
+    ganttRef.current.scrollTo({
+      left: scrollPosition,
+      behavior: smooth ? 'smooth' : 'auto'
+    })
+  }
+
+  // 日付クリックでガントチャートをスクロール
   const scrollToTaskDate = (startDate: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    // ガントチャートの左端が開始日になるようにviewStartDateを変更
-    setViewStartDate(startDate)
+    scrollToDate(startDate)
   }
 
   // テーブルとガントチャートの縦スクロール同期
@@ -229,6 +239,24 @@ export default function KaetaWBS() {
     fetchPhases()
     fetchCategories()
   }, [])
+
+  // 初期マウント時に今日の位置へスクロール
+  useEffect(() => {
+    if (!loading && ganttRef.current) {
+      // 少し遅延させてDOMが確実にレンダリングされてからスクロール
+      const timer = setTimeout(() => {
+        const today = new Date().toISOString().split('T')[0]
+        const dayOffset = getDaysFromStart(today, viewStartDate)
+        if (ganttRef.current) {
+          ganttRef.current.scrollTo({
+            left: dayOffset * 32,
+            behavior: 'auto' // 初期表示は即座に
+          })
+        }
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [loading, viewStartDate])
 
   const fetchTasks = async () => {
     setLoading(true)
@@ -939,7 +967,8 @@ export default function KaetaWBS() {
   const generateDateRange = (startDate: string) => {
     const dates: Date[] = []
     const start = new Date(startDate)
-    for (let i = 0; i < 56; i++) {
+    // 365日分をレンダリング（1年分）
+    for (let i = 0; i < 365; i++) {
       const date = new Date(start)
       date.setDate(start.getDate() + i)
       dates.push(date)
@@ -1159,13 +1188,10 @@ export default function KaetaWBS() {
         {/* Filters */}
         <div className="flex gap-4 items-center flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-dashboard-text-muted">表示開始日:</span>
-            <input
-              type="date"
-              value={viewStartDate}
-              onChange={(e) => setViewStartDate(e.target.value)}
-              className="border border-dashboard-border rounded-md px-2 py-1 text-sm"
-            />
+            <span className="text-sm text-dashboard-text-muted">期間:</span>
+            <span className="text-sm font-medium text-dashboard-text-main">
+              {new Date().getFullYear()}年
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-dashboard-text-muted">フェーズ:</span>
@@ -1192,20 +1218,16 @@ export default function KaetaWBS() {
           <button
             onClick={(e) => {
               e.stopPropagation()
-              setViewStartDate(new Date().toISOString().split('T')[0])
-              // ガントチャートの横スクロール位置もリセット
-              if (ganttRef.current) {
-                ganttRef.current.scrollLeft = 0
-              }
+              scrollToDate(new Date().toISOString().split('T')[0])
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-dashboard-border hover:bg-gray-50 transition-colors text-accent-blue-text-text"
-            title="チャートの先頭を今日に移動"
+            title="今日の位置へスクロール"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 4v6h-6" />
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
             </svg>
-            チャートの先頭を今日に移動
+            今日に移動
           </button>
           <div className="flex gap-2 ml-auto">
             <span className="flex items-center gap-1 text-xs"><span className="w-3 h-3 rounded bg-accent-blue"></span>エンジニア</span>
@@ -1659,12 +1681,12 @@ export default function KaetaWBS() {
                                   })}
                                 </div>
 
-                                {startOffset >= 0 && startOffset < 56 && (
+                                {startOffset >= 0 && startOffset < 365 && (
                                   <div
                                     className={`absolute h-6 rounded-md shadow-sm ${getBarColor(task.owner)} ${task.status === '完了' ? 'opacity-50' : ''} flex items-center group select-none`}
                                     style={{
                                       left: `${startOffset * 32}px`,
-                                      width: `${Math.max(Math.min(duration, 56 - startOffset) * 32 - 4, 32)}px`
+                                      width: `${Math.max(Math.min(duration, 365 - startOffset) * 32 - 4, 32)}px`
                                     }}
                                   >
                                     {/* 左端リサイズハンドル */}
