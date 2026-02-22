@@ -404,7 +404,7 @@ export default function KaetaWBS() {
           onScroll={handleTaskListScroll}
         >
           {/* ヘッダー */}
-          <div className="sticky top-0 bg-dashboard-card z-20 border-b border-dashboard-border px-4 h-11 flex items-center">
+          <div className="sticky top-0 bg-dashboard-card z-20 border-b border-dashboard-border px-4 h-7 flex items-center">
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-dashboard-text-muted w-full">
               <div className="col-span-5">タスク名</div>
               <div className="col-span-2 text-center">担当</div>
@@ -444,7 +444,7 @@ export default function KaetaWBS() {
                       {/* カテゴリヘッダー */}
                       {category && (
                         <div
-                          className={`sticky top-[68px] z-10 bg-gray-50 h-7 text-sm font-medium text-dashboard-text-muted flex items-center gap-2 cursor-pointer hover:bg-gray-100 border-b border-dashboard-border ${
+                          className={`sticky top-[68px] z-10 bg-gray-50 h-10 text-sm font-medium text-dashboard-text-muted flex items-center gap-2 cursor-pointer hover:bg-gray-100 border-b border-dashboard-border ${
                             taskDragState.draggingTaskId && taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === category ? 'bg-blue-50' : ''
                           }`}
                           style={{ paddingLeft: '32px', paddingRight: '16px' }}
