@@ -129,7 +129,6 @@ export default function KaetaWBS() {
     columnVirtualizer,
     currentViewDate,
     updateCurrentViewDate,
-    scrollToYear,
     scrollToDate,
     scrollToToday,
     virtualItems,
@@ -377,7 +376,6 @@ export default function KaetaWBS() {
         onShowCategoryModal={() => setShowCategoryModal(true)}
         onAddTask={handleAddTask}
         onScrollToDate={(date) => scrollToDate(date)}
-        onScrollToYear={scrollToYear}
         currentViewDate={currentViewDate}
       />
 

@@ -14,7 +14,6 @@ interface HeaderProps {
   onShowCategoryModal: () => void
   onAddTask: () => void
   onScrollToDate: (date: string) => void
-  onScrollToYear: (year: number) => void
   currentViewDate?: CurrentViewDate
 }
 
@@ -29,7 +28,6 @@ export const Header: React.FC<HeaderProps> = ({
   onShowCategoryModal,
   onAddTask,
   onScrollToDate,
-  onScrollToYear,
   currentViewDate
 }) => {
   return (
@@ -71,22 +69,6 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="text-sm font-medium text-dashboard-text-main">
             {currentViewDate ? `${currentViewDate.year}年${currentViewDate.month}月` : `${new Date().getFullYear()}年`}
           </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onScrollToYear(-1)}
-            className="px-2 py-1 text-xs rounded border border-dashboard-border hover:bg-gray-50 transition-colors"
-            title="1年前へ移動"
-          >
-            ◀ 前年
-          </button>
-          <button
-            onClick={() => onScrollToYear(1)}
-            className="px-2 py-1 text-xs rounded border border-dashboard-border hover:bg-gray-50 transition-colors"
-            title="1年後へ移動"
-          >
-            来年 ▶
-          </button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-dashboard-text-muted">フェーズ:</span>
