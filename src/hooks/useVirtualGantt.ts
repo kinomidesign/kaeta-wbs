@@ -67,21 +67,19 @@ export const useVirtualGantt = (options: UseVirtualGanttOptions = {}) => {
   // 初期マウント時に今日の位置へスクロール（先頭に配置）
   useEffect(() => {
     if (initialScrollToToday && ganttRef.current) {
-      const timer = setTimeout(() => {
-        const todayIndex = getTodayIndex()
-        columnVirtualizer.scrollToIndex(todayIndex, { align: 'start', behavior: 'auto' })
-        // スクロール後にcurrentViewDateを更新
-        setTimeout(() => {
-          const today = new Date()
-          setCurrentViewDate({
-            year: today.getFullYear(),
-            month: today.getMonth() + 1
-          })
-        }, 50)
-      }, 100)
-      return () => clearTimeout(timer)
+      // 直接scrollLeftを設定（virtualizerの初期化を待たない）
+      const todayIndex = getTodayIndex()
+      const scrollPosition = todayIndex * DAY_WIDTH
+      ganttRef.current.scrollLeft = scrollPosition
+
+      // currentViewDateを今日の日付で初期化
+      const today = new Date()
+      setCurrentViewDate({
+        year: today.getFullYear(),
+        month: today.getMonth() + 1
+      })
     }
-  }, [initialScrollToToday, columnVirtualizer])
+  }, [initialScrollToToday])
 
   return {
     ganttRef,
