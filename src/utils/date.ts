@@ -1,4 +1,9 @@
-import { TIMELINE_DAYS } from '@/constants'
+import {
+  TIMELINE_DAYS,
+  TIMELINE_BASE_DATE,
+  TIMELINE_DAYS_BEFORE,
+  getTimelineStartDate
+} from '@/constants'
 
 /**
  * 2つの日付間の日数を計算（開始日と終了日を含む）
@@ -103,4 +108,42 @@ export const isToday = (date: Date): boolean => {
     date.getMonth() === today.getMonth() &&
     date.getFullYear() === today.getFullYear()
   )
+}
+
+/**
+ * タイムライン基準日からの日数オフセットを計算
+ * 仮想スクロール用：タイムライン開始日（基準日-365日）からの日数
+ */
+export const getDaysFromBase = (date: string): number => {
+  const taskDate = new Date(date)
+  const baseDate = getTimelineStartDate()
+  return Math.ceil((taskDate.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+/**
+ * タイムラインのインデックスから日付を取得
+ */
+export const getDateFromIndex = (index: number): Date => {
+  const baseDate = getTimelineStartDate()
+  const date = new Date(baseDate)
+  date.setDate(date.getDate() + index)
+  return date
+}
+
+/**
+ * 指定した年の1月1日のタイムラインインデックスを取得
+ */
+export const getYearStartIndex = (year: number): number => {
+  const targetDate = new Date(year, 0, 1)
+  const baseDate = getTimelineStartDate()
+  return Math.ceil((targetDate.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+/**
+ * 今日のタイムラインインデックスを取得
+ */
+export const getTodayIndex = (): number => {
+  const today = new Date()
+  const baseDate = getTimelineStartDate()
+  return Math.ceil((today.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24))
 }

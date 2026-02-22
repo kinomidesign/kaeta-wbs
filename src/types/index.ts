@@ -7,8 +7,8 @@ export interface Task {
   name: string
   owner: string
   status: string
-  start_date: string
-  end_date: string
+  start_date: string | null  // nullable: 日付なしタスクをサポート
+  end_date: string | null    // nullable: 日付なしタスクをサポート
   effort: string | null
   priority: string
   note: string | null
@@ -88,4 +88,21 @@ export interface EditingTask {
   priority: string
   note: string
   indent_level: number
+}
+
+// 新規タスクドラッグ状態の型定義
+export interface NewTaskDragState {
+  isActive: boolean
+  startX: number
+  currentX: number
+  startIndex: number
+  currentIndex: number
+  phase: string
+  category: string
+}
+
+// 現在表示中の日付（ヘッダー表示用）
+export interface CurrentViewDate {
+  year: number
+  month: number
 }

@@ -43,6 +43,9 @@ export const useGanttDrag = ({
     task: Task,
     type: 'move' | 'resize-start' | 'resize-end'
   ) => {
+    // 日付がnullのタスクはドラッグできない
+    if (!task.start_date || !task.end_date) return
+
     e.stopPropagation()
     e.preventDefault()
     hasDraggedRef.current = false

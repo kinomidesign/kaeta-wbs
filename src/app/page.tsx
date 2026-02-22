@@ -1,16 +1,26 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useRef } from 'react'
-import type { Task, EditingTask, StatusPopupState, IndentPopupState } from '@/types'
-import { TABLE_WIDTH, DAY_WIDTH } from '@/constants'
-import { supabase } from '@/lib/supabase'
-import { generateDateRange, getYearStartDate, getDaysFromStart } from '@/utils/date'
-import { useTasks, usePhases, useCategories, useAccordion, useGanttDrag, useTaskDrag } from '@/hooks'
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
+import type { Task, EditingTask, StatusPopupState } from '@/types'
+import { TABLE_WIDTH } from '@/constants'
+
+// Hooks
+import {
+  useTasks,
+  usePhases,
+  useCategories,
+  useAccordion,
+  useGanttDrag,
+  useTaskDrag,
+  useVirtualGantt,
+  useNewTaskDrag
+} from '@/hooks'
+
+// Components
 import {
   LoadingSpinner,
   Header,
   StatusPopup,
-  IndentPopup,
   TaskModal,
   PhaseModal,
   CategoryModal,
@@ -18,10 +28,24 @@ import {
   GanttBar,
   TaskRow
 } from '@/components'
-import { isWeekend } from '@/utils/date'
+
+// 初期編集タスク
+const initialEditingTask: EditingTask = {
+  phase: 'Phase 1',
+  category: '',
+  name: '',
+  owner: 'エンジニア',
+  status: '未着手',
+  start_date: '',
+  end_date: '',
+  effort: '',
+  priority: '必須',
+  note: '',
+  indent_level: 0
+}
 
 export default function KaetaWBS() {
-  // フェーズとカテゴリのフック
+  // フェーズ・カテゴリ
   const {
     phases,
     phaseNames,
@@ -50,7 +74,7 @@ export default function KaetaWBS() {
     setEditingCategory
   } = useCategories()
 
-  // タスクのフック
+  // タスク
   const {
     tasks,
     setTasks,
@@ -58,33 +82,35 @@ export default function KaetaWBS() {
     saving,
     fetchTasks,
     updateTask,
-    addTask: addTaskToDb,
-    saveTask: saveTaskToDb,
-    deleteTask: deleteTaskFromDb,
+    addTask,
+    saveTask,
+    deleteTask,
     getFilteredTasks,
     getGroupedByPhase
   } = useTasks({ phases, categories })
 
-  // アコーディオンのフック
+  // アコーディオン
   const {
     togglePhaseAccordion,
     toggleCategoryAccordion,
     isPhaseExpanded,
     isCategoryExpanded,
     collapsedTasks,
-    toggleTaskCollapse
+    toggleTaskCollapse,
+    isTaskCollapsed
   } = useAccordion()
 
-  // ガントチャートドラッグのフック
+  // ガントチャートドラッグ
   const {
+    dragState,
     hasDraggedRef,
-    handleDragStart,
+    handleDragStart: handleGanttDragStart,
     handleDragMove,
     handleDragEnd,
     saving: ganttSaving
   } = useGanttDrag({ tasks, setTasks, fetchTasks })
 
-  // タスクドラッグのフック
+  // タスクリストドラッグ
   const {
     taskDragState,
     handleTaskDragStart,
@@ -97,107 +123,106 @@ export default function KaetaWBS() {
     setDropTargetForCategory
   } = useTaskDrag({ tasks, setTasks })
 
-  // UI状態
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  // 仮想スクロール
+  const {
+    ganttRef,
+    columnVirtualizer,
+    currentViewDate,
+    updateCurrentViewDate,
+    scrollToYear,
+    scrollToDate,
+    scrollToToday,
+    virtualItems,
+    totalSize
+  } = useVirtualGantt({ initialScrollToToday: true })
+
+  // 新規タスクドラッグ（空白エリアからの作成）
+  const handleCreateTaskFromDrag = useCallback((phase: string, category: string, startDate: string, endDate: string) => {
+    setEditingTask({
+      ...initialEditingTask,
+      phase,
+      category,
+      start_date: startDate,
+      end_date: endDate
+    })
+    setTaskModalMode('add')
+    setShowTaskModal(true)
+  }, [])
+
+  const {
+    newTaskDragState,
+    handleEmptyAreaDragStart,
+    handleNewTaskDragMove,
+    handleNewTaskDragEnd,
+    getPreviewInfo,
+    isNewTaskDragging
+  } = useNewTaskDrag({
+    ganttRef: ganttRef as React.RefObject<HTMLDivElement>,
+    onCreateTask: handleCreateTaskFromDrag
+  })
+
+  // モーダル状態
   const [showTaskModal, setShowTaskModal] = useState(false)
   const [taskModalMode, setTaskModalMode] = useState<'add' | 'edit'>('add')
   const [showPhaseModal, setShowPhaseModal] = useState(false)
   const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [editingTask, setEditingTask] = useState<EditingTask>(initialEditingTask)
+
+  // フィルター
   const [filterPhase, setFilterPhase] = useState('all')
   const [filterOwner, setFilterOwner] = useState('all')
+
+  // ステータスポップアップ
   const [statusPopup, setStatusPopup] = useState<StatusPopupState | null>(null)
-  const [indentPopup, setIndentPopup] = useState<IndentPopupState | null>(null)
 
-  // 編集中タスク
-  const [editingTask, setEditingTask] = useState<EditingTask>({
-    phase: 'Phase 1',
-    category: '',
-    name: '',
-    owner: 'エンジニア',
-    status: '未着手',
-    start_date: '',
-    end_date: '',
-    effort: '',
-    priority: '必須',
-    note: '',
-    indent_level: 0
-  })
-
-  // タイムライン
-  const viewStartDate = useMemo(() => getYearStartDate(), [])
-  const ganttDateRange = useMemo(() => generateDateRange(viewStartDate), [viewStartDate])
-
-  // テーブル幅
+  // テーブルリサイズ
   const [tableWidth, setTableWidth] = useState<number>(TABLE_WIDTH.default)
   const [isResizing, setIsResizing] = useState(false)
-  const resizeStartXRef = useRef(0)
+  const resizeStartXRef = useRef<number>(0)
   const resizeStartWidthRef = useRef<number>(TABLE_WIDTH.default)
 
   // スクロール同期
-  const ganttRef = useRef<HTMLDivElement>(null)
   const taskListRef = useRef<HTMLDivElement>(null)
   const isSyncingScrollRef = useRef(false)
 
-  // データ取得
-  useEffect(() => {
-    fetchPhases()
-    fetchCategories()
-  }, [])
+  // フィルター済みタスク
+  const filteredTasks = useMemo(
+    () => getFilteredTasks(filterPhase, filterOwner),
+    [getFilteredTasks, filterPhase, filterOwner]
+  )
 
-  // 初期スクロール
-  useEffect(() => {
-    if (!loading && ganttRef.current) {
-      const timer = setTimeout(() => {
-        const today = new Date().toISOString().split('T')[0]
-        const dayOffset = getDaysFromStart(today, viewStartDate)
-        if (ganttRef.current) {
-          ganttRef.current.scrollTo({ left: dayOffset * DAY_WIDTH, behavior: 'auto' })
-        }
-      }, 100)
-      return () => clearTimeout(timer)
-    }
-  }, [loading, viewStartDate])
-
-  // リサイズ処理
-  useEffect(() => {
-    if (!isResizing) return
-    const handleResizeMove = (e: MouseEvent) => {
-      const delta = e.clientX - resizeStartXRef.current
-      const newWidth = Math.max(TABLE_WIDTH.min, Math.min(TABLE_WIDTH.max, resizeStartWidthRef.current + delta))
-      setTableWidth(newWidth)
-    }
-    const handleResizeEnd = () => setIsResizing(false)
-    document.addEventListener('mousemove', handleResizeMove)
-    document.addEventListener('mouseup', handleResizeEnd)
-    return () => {
-      document.removeEventListener('mousemove', handleResizeMove)
-      document.removeEventListener('mouseup', handleResizeEnd)
-    }
-  }, [isResizing])
+  // フェーズ・カテゴリでグループ化
+  const groupedByPhase = useMemo(
+    () => getGroupedByPhase(filteredTasks, phases, categories),
+    [getGroupedByPhase, filteredTasks, phases, categories]
+  )
 
   // スクロール同期
   const handleTaskListScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (isSyncingScrollRef.current) return
     isSyncingScrollRef.current = true
-    if (ganttRef.current) ganttRef.current.scrollTop = e.currentTarget.scrollTop
-    requestAnimationFrame(() => { isSyncingScrollRef.current = false })
+    if (ganttRef.current) {
+      ganttRef.current.scrollTop = e.currentTarget.scrollTop
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false
+    })
   }
 
   const handleGanttScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (isSyncingScrollRef.current) return
     isSyncingScrollRef.current = true
-    if (taskListRef.current) taskListRef.current.scrollTop = e.currentTarget.scrollTop
-    requestAnimationFrame(() => { isSyncingScrollRef.current = false })
+    if (taskListRef.current) {
+      taskListRef.current.scrollTop = e.currentTarget.scrollTop
+    }
+    updateCurrentViewDate()
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false
+    })
   }
 
-  // 日付へスクロール
-  const scrollToDate = (targetDate: string, smooth = true) => {
-    if (!ganttRef.current) return
-    const dayOffset = getDaysFromStart(targetDate, viewStartDate)
-    ganttRef.current.scrollTo({ left: dayOffset * DAY_WIDTH, behavior: smooth ? 'smooth' : 'auto' })
-  }
-
-  // リサイズ開始
+  // テーブルリサイズ
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
     setIsResizing(true)
@@ -205,108 +230,132 @@ export default function KaetaWBS() {
     resizeStartWidthRef.current = tableWidth
   }
 
-  // タスクの子チェック・非表示チェック
-  const hasChildren = (task: Task, allTasks: Task[], taskIndex: number): boolean => {
-    if (taskIndex >= allTasks.length - 1) return false
-    return (allTasks[taskIndex + 1].indent_level || 0) > (task.indent_level || 0)
-  }
+  useEffect(() => {
+    if (!isResizing) return
 
-  const isTaskHidden = (task: Task, allTasks: Task[], taskIndex: number): boolean => {
-    const taskLevel = task.indent_level || 0
-    if (taskLevel === 0) return false
-    for (let i = taskIndex - 1; i >= 0; i--) {
-      const prevTask = allTasks[i]
-      const prevLevel = prevTask.indent_level || 0
-      if (prevLevel < taskLevel) {
-        if (collapsedTasks[prevTask.id]) return true
-        if (prevLevel > 0) continue
-        break
-      }
+    const handleResizeMove = (e: MouseEvent) => {
+      const delta = e.clientX - resizeStartXRef.current
+      const newWidth = Math.max(TABLE_WIDTH.min, Math.min(TABLE_WIDTH.max, resizeStartWidthRef.current + delta))
+      setTableWidth(newWidth)
     }
-    return false
-  }
 
-  // タスクモーダル
-  const resetEditingTask = () => {
+    const handleResizeEnd = () => {
+      setIsResizing(false)
+    }
+
+    document.addEventListener('mousemove', handleResizeMove)
+    document.addEventListener('mouseup', handleResizeEnd)
+
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove)
+      document.removeEventListener('mouseup', handleResizeEnd)
+    }
+  }, [isResizing])
+
+  // ポップアップクリックアウト
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setStatusPopup(null)
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
+
+  // タスク追加モーダル
+  const handleAddTask = () => {
+    const firstPhase = phaseNames[0] || 'Phase 1'
+    const phase = phases.find(p => p.name === firstPhase)
+    const phaseCategories = phase ? categories.filter(c => c.phase_id === phase.id) : []
+    const firstCategory = phaseCategories.length > 0 ? phaseCategories[0].name : ''
+
     setEditingTask({
-      phase: 'Phase 1', category: '', name: '', owner: 'エンジニア', status: '未着手',
-      start_date: '', end_date: '', effort: '', priority: '必須', note: '', indent_level: 0
+      ...initialEditingTask,
+      phase: firstPhase,
+      category: firstCategory
     })
-  }
-
-  const openTaskModal = (mode: 'add' | 'edit', task?: Task, defaultPhase?: string, defaultCategory?: string) => {
-    setTaskModalMode(mode)
-    if (mode === 'edit' && task) {
-      setSelectedTask(task)
-      setEditingTask({
-        phase: task.phase, category: task.category, name: task.name, owner: task.owner,
-        status: task.status, start_date: task.start_date, end_date: task.end_date,
-        effort: task.effort || '', priority: task.priority, note: task.note || '',
-        indent_level: task.indent_level || 0
-      })
-    } else {
-      resetEditingTask()
-      if (defaultPhase) setEditingTask(prev => ({ ...prev, phase: defaultPhase }))
-      if (defaultCategory) setEditingTask(prev => ({ ...prev, category: defaultCategory }))
-    }
+    setTaskModalMode('add')
     setShowTaskModal(true)
   }
 
-  const handleSaveTask = async () => {
-    if (taskModalMode === 'add') {
-      const result = await addTaskToDb(editingTask, phases, categories)
-      if (result) {
-        setShowTaskModal(false)
-        resetEditingTask()
-      }
-    } else if (selectedTask) {
-      const success = await saveTaskToDb(selectedTask.id, editingTask, phases, categories)
-      if (success) {
-        setShowTaskModal(false)
-        setSelectedTask(null)
-        resetEditingTask()
-      }
-    }
+  // タスククリック（編集）
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task)
+    setEditingTask({
+      phase: task.phase,
+      category: task.category,
+      name: task.name,
+      owner: task.owner,
+      status: task.status,
+      start_date: task.start_date || '',
+      end_date: task.end_date || '',
+      effort: task.effort || '',
+      priority: task.priority,
+      note: task.note || '',
+      indent_level: task.indent_level || 0
+    })
+    setTaskModalMode('edit')
+    setShowTaskModal(true)
   }
 
+  // タスク保存
+  const handleSaveTask = async () => {
+    if (taskModalMode === 'add') {
+      await addTask(editingTask, phases, categories)
+    } else if (selectedTask) {
+      await saveTask(selectedTask.id, editingTask, phases, categories)
+    }
+    setShowTaskModal(false)
+    setSelectedTask(null)
+  }
+
+  // タスク削除
   const handleDeleteTask = async () => {
-    if (!selectedTask || !confirm('このタスクを削除しますか？')) return
-    const success = await deleteTaskFromDb(selectedTask.id)
-    if (success) {
+    if (selectedTask && confirm('このタスクを削除しますか？')) {
+      await deleteTask(selectedTask.id)
       setShowTaskModal(false)
       setSelectedTask(null)
     }
   }
 
+  // ステータスクリック
+  const handleStatusClick = (task: Task, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setStatusPopup({
+      taskId: task.id,
+      x: e.clientX,
+      y: e.clientY
+    })
+  }
+
   // ステータス変更
-  const selectStatus = async (taskId: number, status: string) => {
+  const handleStatusSelect = async (taskId: number, status: string) => {
     await updateTask(taskId, 'status', status)
     setStatusPopup(null)
   }
 
   // インデント変更
-  const changeIndent = async (e: React.MouseEvent, taskId: number, delta: number) => {
+  const handleChangeIndent = async (e: React.MouseEvent, taskId: number, delta: number) => {
     e.stopPropagation()
     e.preventDefault()
     const task = tasks.find(t => t.id === taskId)
     if (!task) return
-    const currentLevel = task.indent_level || 0
-    const newLevel = Math.max(0, Math.min(3, currentLevel + delta))
-    if (newLevel !== currentLevel) {
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, indent_level: newLevel } : t))
-      const { error } = await supabase.from('tasks').update({ indent_level: newLevel }).eq('id', taskId)
-      if (error) setTasks(prev => prev.map(t => t.id === taskId ? { ...t, indent_level: currentLevel } : t))
+    const currentIndent = task.indent_level || 0
+    const newIndent = Math.max(0, Math.min(3, currentIndent + delta))
+    if (newIndent !== currentIndent) {
+      await updateTask(taskId, 'indent_level', newIndent)
     }
   }
 
-  // フィルタリング・グルーピング
-  const filteredTasks = getFilteredTasks(filterPhase, filterOwner)
-  const groupedByPhase = useMemo(
-    () => getGroupedByPhase(filteredTasks, phases, categories),
-    [filteredTasks, phases, categories, getGroupedByPhase]
-  )
+  // 日付クリックでスクロール
+  const handleDateClick = (startDate: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    scrollToDate(startDate)
+  }
 
-  if (loading) return <LoadingSpinner />
+  // ローディング
+  if (loading) {
+    return <LoadingSpinner />
+  }
 
   return (
     <div className="min-h-screen bg-dashboard-bg">
@@ -319,162 +368,252 @@ export default function KaetaWBS() {
         phaseNames={phaseNames}
         onShowPhaseModal={() => setShowPhaseModal(true)}
         onShowCategoryModal={() => setShowCategoryModal(true)}
-        onAddTask={() => openTaskModal('add')}
-        onScrollToDate={scrollToDate}
+        onAddTask={handleAddTask}
+        onScrollToDate={(date) => scrollToDate(date)}
+        onScrollToYear={scrollToYear}
+        currentViewDate={currentViewDate}
       />
 
-      {/* Main Content */}
+      {/* メインコンテンツ */}
       <div
-        className={`flex ${isResizing ? 'cursor-col-resize select-none' : ''}`}
+        className="flex overflow-hidden"
         style={{ height: 'calc(100vh - 140px)' }}
-        onClick={() => { setStatusPopup(null); setIndentPopup(null) }}
+        onMouseMove={(e) => {
+          handleDragMove(e)
+          handleNewTaskDragMove(e)
+        }}
+        onMouseUp={() => {
+          handleDragEnd()
+          handleNewTaskDragEnd()
+        }}
+        onMouseLeave={() => {
+          handleDragEnd()
+          handleNewTaskDragEnd()
+        }}
       >
-        {/* Task List */}
-        <div ref={taskListRef} onScroll={handleTaskListScroll} className="flex-shrink-0 bg-dashboard-card relative overflow-y-auto overflow-x-hidden scrollbar-hide" style={{ width: `${tableWidth}px` }}>
-          <div className="sticky top-0 bg-gray-50 border-b border-dashboard-border px-4 py-2 text-xs font-medium text-dashboard-text-muted grid grid-cols-12 gap-2 z-20">
-            <div className="col-span-5">タスク</div>
-            <div className="col-span-2 text-center">担当者</div>
-            <div className="col-span-3 text-center">期限</div>
-            <div className="col-span-2 text-center">ステータス</div>
+        {/* タスクリスト */}
+        <div
+          ref={taskListRef}
+          className="flex-shrink-0 overflow-y-auto bg-dashboard-card border-r border-dashboard-border"
+          style={{ width: tableWidth }}
+          onScroll={handleTaskListScroll}
+        >
+          {/* ヘッダー */}
+          <div className="sticky top-0 bg-dashboard-card z-20 border-b border-dashboard-border px-4 py-2">
+            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-dashboard-text-muted">
+              <div className="col-span-5">タスク名</div>
+              <div className="col-span-2 text-center">担当</div>
+              <div className="col-span-3 text-center">期間</div>
+              <div className="col-span-2 text-center">ステータス</div>
+            </div>
           </div>
 
-          {Object.entries(groupedByPhase).map(([phase, phaseCategories]) => (
-            <div key={phase}>
-              {/* Phase Header */}
-              <div
-                onClick={() => togglePhaseAccordion(phase)}
-                onDragOver={(e) => { e.preventDefault(); if (taskDragState.draggingTaskId) setDropTargetForPhase(phase) }}
-                onDrop={(e) => handleDropToPhase(e, phase)}
-                className={`bg-gray-100 text-dashboard-text-main px-4 h-12 text-sm font-semibold cursor-pointer hover:bg-gray-200 flex items-center justify-between border-b border-dashboard-border transition-all
-                  ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === '' && !taskDragState.dropTarget?.taskId ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/20' : ''}`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className={`transform transition-transform ${isPhaseExpanded(phase) ? 'rotate-90' : ''}`}>▶</span>
+          {/* タスク一覧 */}
+          {Object.entries(groupedByPhase).map(([phase, categoryGroup]) => {
+            const isPhaseOpen = isPhaseExpanded(phase)
+
+            return (
+              <div key={phase}>
+                {/* フェーズヘッダー */}
+                <div
+                  className={`sticky top-8 z-10 bg-gray-100 px-4 py-2 font-bold text-dashboard-text-main flex items-center gap-2 cursor-pointer hover:bg-gray-200 border-b border-dashboard-border ${
+                    taskDragState.draggingTaskId && taskDragState.dropTarget?.phase === phase && !taskDragState.dropTarget?.category ? 'bg-blue-100' : ''
+                  }`}
+                  onClick={() => togglePhaseAccordion(phase)}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    setDropTargetForPhase(phase)
+                  }}
+                  onDrop={(e) => handleDropToPhase(e, phase)}
+                >
+                  <span className={`transform transition-transform ${isPhaseOpen ? 'rotate-90' : ''}`}>▶</span>
                   {phase}
                 </div>
-                <span className="text-xs text-dashboard-text-muted font-normal">
-                  {Object.values(phaseCategories).flat().length} タスク
-                </span>
-              </div>
 
-              {isPhaseExpanded(phase) && Object.entries(phaseCategories).map(([category, categoryTasks]) => (
-                <div key={`${phase}-${category}`}>
-                  {/* Category Header */}
-                  <div
-                    onClick={() => toggleCategoryAccordion(phase, category)}
-                    onDragOver={(e) => { e.preventDefault(); if (taskDragState.draggingTaskId) setDropTargetForCategory(phase, category) }}
-                    onDrop={(e) => handleDropToCategory(e, phase, category)}
-                    className={`bg-gray-50 text-dashboard-text-main px-4 h-10 pl-8 text-sm cursor-pointer hover:bg-gray-100 flex items-center justify-between border-b border-dashboard-border transition-all
-                      ${taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === category && !taskDragState.dropTarget?.taskId ? 'ring-2 ring-accent-blue ring-inset bg-accent-blue/10' : ''}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`transform transition-transform text-xs ${isCategoryExpanded(phase, category) ? 'rotate-90' : ''}`}>▶</span>
-                      {category || '(カテゴリなし)'}
-                    </div>
-                    <span className="text-xs text-dashboard-text-muted">{categoryTasks.length} タスク</span>
-                  </div>
+                {/* カテゴリ */}
+                {isPhaseOpen && Object.entries(categoryGroup).map(([category, categoryTasks]) => {
+                  const isCategoryOpen = isCategoryExpanded(phase, category)
 
-                  {isCategoryExpanded(phase, category) && (
-                    <>
-                      {categoryTasks.map((task, taskIndex) => (
-                        <TaskRow
-                          key={task.id}
-                          task={task}
-                          taskIndex={taskIndex}
-                          categoryTasks={categoryTasks}
-                          selectedTaskId={selectedTask?.id ?? null}
-                          taskDragState={taskDragState}
-                          collapsedTasks={collapsedTasks}
-                          onTaskClick={(t) => openTaskModal('edit', t)}
-                          onDragStart={handleTaskDragStart}
-                          onDragEnd={handleTaskDragEnd}
-                          onDragOver={handleTaskDragOver}
-                          onDrop={handleTaskDrop}
-                          onStatusClick={(t, e) => {
-                            const rect = (e.target as HTMLElement).getBoundingClientRect()
-                            setStatusPopup({ taskId: t.id, x: rect.left, y: rect.bottom + 4 })
+                  return (
+                    <div key={`${phase}-${category}`}>
+                      {/* カテゴリヘッダー */}
+                      {category && (
+                        <div
+                          className={`sticky top-16 z-10 bg-gray-50 px-4 py-1.5 text-sm font-medium text-dashboard-text-muted flex items-center gap-2 cursor-pointer hover:bg-gray-100 border-b border-dashboard-border ${
+                            taskDragState.draggingTaskId && taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === category ? 'bg-blue-50' : ''
+                          }`}
+                          style={{ marginLeft: '16px' }}
+                          onClick={() => toggleCategoryAccordion(phase, category)}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            setDropTargetForCategory(phase, category)
                           }}
-                          onDateClick={(startDate, e) => { e.stopPropagation(); scrollToDate(startDate) }}
-                          onToggleCollapse={toggleTaskCollapse}
-                          onChangeIndent={changeIndent}
-                          hasChildren={hasChildren(task, categoryTasks, taskIndex)}
-                          isHidden={isTaskHidden(task, categoryTasks, taskIndex)}
-                        />
-                      ))}
-                      <div onClick={() => openTaskModal('add', undefined, phase, category)} className="px-4 h-10 pl-12 border-b border-gray-100 cursor-pointer hover:bg-blue-50 text-accent-blue-text text-sm flex items-center gap-1">
-                        <span>+</span> タスクを追加
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
+                          onDrop={(e) => handleDropToCategory(e, phase, category)}
+                        >
+                          <span className={`transform transition-transform text-xs ${isCategoryOpen ? 'rotate-90' : ''}`}>▶</span>
+                          {category}
+                          <span className="text-xs text-dashboard-text-muted ml-1">({categoryTasks.length})</span>
+                        </div>
+                      )}
 
-        {/* Resize Handle */}
-        <div
-          className={`flex-shrink-0 w-1 cursor-col-resize z-30 group hover:bg-[#009EA4] transition-colors relative ${isResizing ? 'bg-[#009EA4]' : 'bg-dashboard-border'}`}
-          onMouseDown={handleResizeStart}
-        >
-          <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            <div className="bg-[#009EA4] rounded-full p-1.5 shadow-md">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="white"><path d="M2 6L4.5 3.5V8.5L2 6ZM10 6L7.5 3.5V8.5L10 6Z" /></svg>
-            </div>
-          </div>
-        </div>
+                      {/* タスク */}
+                      {(category ? isCategoryOpen : true) && categoryTasks.map((task, taskIndex) => {
+                        const hasChildren = categoryTasks.some((t, i) =>
+                          i > taskIndex && (t.indent_level || 0) > (task.indent_level || 0)
+                        )
+                        const isHidden = (() => {
+                          for (let i = taskIndex - 1; i >= 0; i--) {
+                            const prevTask = categoryTasks[i]
+                            if ((prevTask.indent_level || 0) < (task.indent_level || 0)) {
+                              if (collapsedTasks[prevTask.id]) return true
+                              break
+                            }
+                          }
+                          return false
+                        })()
 
-        {/* Gantt Chart */}
-        <div
-          ref={ganttRef}
-          className="flex-1 min-w-0 overflow-x-auto overflow-y-auto"
-          onScroll={handleGanttScroll}
-          onMouseMove={handleDragMove}
-          onMouseUp={handleDragEnd}
-          onMouseLeave={handleDragEnd}
-        >
-          <GanttDateHeader dateRange={ganttDateRange} />
-
-          {Object.entries(groupedByPhase).map(([phase, phaseCategories]) => (
-            <div key={phase}>
-              <div className="h-12 bg-gray-100 border-b border-dashboard-border"></div>
-              {isPhaseExpanded(phase) && Object.entries(phaseCategories).map(([category, categoryTasks]) => (
-                <div key={`${phase}-${category}`}>
-                  <div className="h-10 bg-gray-50 border-b border-dashboard-border"></div>
-                  {isCategoryExpanded(phase, category) && (
-                    <>
-                      {categoryTasks.map((task, taskIndex) => {
-                        if (isTaskHidden(task, categoryTasks, taskIndex)) return null
                         return (
-                          <div
+                          <TaskRow
                             key={task.id}
-                            className={`h-12 flex items-center border-b border-gray-100 relative ${selectedTask?.id === task.id ? 'bg-blue-50' : ''}`}
-                            onClick={() => { if (!hasDraggedRef.current) openTaskModal('edit', task); hasDraggedRef.current = false }}
-                          >
-                            <div className="absolute inset-0 flex">
-                              {ganttDateRange.map((date, i) => (
-                                <div key={i} className={`w-8 flex-shrink-0 border-r border-gray-50 ${isWeekend(date) ? 'bg-gray-50' : ''}`} />
-                              ))}
-                            </div>
-                            <GanttBar task={task} viewStartDate={viewStartDate} onDragStart={handleDragStart} />
-                          </div>
+                            task={task}
+                            taskIndex={taskIndex}
+                            categoryTasks={categoryTasks}
+                            selectedTaskId={selectedTask?.id ?? null}
+                            taskDragState={taskDragState}
+                            collapsedTasks={collapsedTasks}
+                            onTaskClick={handleTaskClick}
+                            onDragStart={handleTaskDragStart}
+                            onDragEnd={handleTaskDragEnd}
+                            onDragOver={handleTaskDragOver}
+                            onDrop={handleTaskDrop}
+                            onStatusClick={handleStatusClick}
+                            onDateClick={handleDateClick}
+                            onToggleCollapse={toggleTaskCollapse}
+                            onChangeIndent={handleChangeIndent}
+                            hasChildren={hasChildren}
+                            isHidden={isHidden}
+                          />
                         )
                       })}
-                      <div className="h-10 border-b border-gray-100"></div>
-                    </>
-                  )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* リサイズハンドル */}
+        <div
+          className={`w-1 cursor-col-resize hover:bg-accent-blue flex-shrink-0 transition-colors ${isResizing ? 'bg-accent-blue' : 'bg-gray-200'}`}
+          onMouseDown={handleResizeStart}
+        />
+
+        {/* ガントチャート */}
+        <div
+          ref={ganttRef}
+          className="flex-1 overflow-auto bg-white"
+          onScroll={handleGanttScroll}
+        >
+          {/* 日付ヘッダー（仮想スクロール） */}
+          <GanttDateHeader
+            virtualItems={virtualItems}
+            totalSize={totalSize}
+          />
+
+          {/* ガントバー */}
+          <div style={{ width: totalSize, position: 'relative' }}>
+            {Object.entries(groupedByPhase).map(([phase, categoryGroup]) => {
+              const isPhaseOpen = isPhaseExpanded(phase)
+
+              return (
+                <div key={phase}>
+                  {/* フェーズ行（空行） */}
+                  <div className="h-10 border-b border-gray-100" />
+
+                  {/* カテゴリ */}
+                  {isPhaseOpen && Object.entries(categoryGroup).map(([category, categoryTasks]) => {
+                    const isCategoryOpen = isCategoryExpanded(phase, category)
+
+                    return (
+                      <div key={`${phase}-${category}`}>
+                        {/* カテゴリ行（空白エリア - ドラッグで新規タスク作成） */}
+                        {category && (
+                          <div
+                            className="h-7 border-b border-gray-100 relative cursor-crosshair hover:bg-gray-50"
+                            onMouseDown={(e) => handleEmptyAreaDragStart(e, phase, category)}
+                          >
+                            {/* 新規タスクプレビュー */}
+                            {isNewTaskDragging && newTaskDragState.phase === phase && newTaskDragState.category === category && (() => {
+                              const preview = getPreviewInfo()
+                              if (!preview) return null
+                              return (
+                                <div
+                                  className="absolute top-1 h-5 bg-blue-200 border-2 border-blue-400 rounded opacity-70"
+                                  style={{ left: preview.left, width: preview.width }}
+                                >
+                                  <span className="absolute -top-5 left-0 text-xs bg-gray-800 text-white px-1 rounded">
+                                    {preview.startDate.slice(5)}
+                                  </span>
+                                  <span className="absolute -top-5 right-0 text-xs bg-gray-800 text-white px-1 rounded">
+                                    {preview.endDate.slice(5)}
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        )}
+
+                        {/* タスクバー */}
+                        {(category ? isCategoryOpen : true) && categoryTasks.map((task, taskIndex) => {
+                          const isHidden = (() => {
+                            for (let i = taskIndex - 1; i >= 0; i--) {
+                              const prevTask = categoryTasks[i]
+                              if ((prevTask.indent_level || 0) < (task.indent_level || 0)) {
+                                if (collapsedTasks[prevTask.id]) return true
+                                break
+                              }
+                            }
+                            return false
+                          })()
+
+                          if (isHidden) return null
+
+                          return (
+                            <div
+                              key={task.id}
+                              className="h-12 border-b border-gray-100 relative"
+                            >
+                              <div className="absolute top-3">
+                                <GanttBar
+                                  task={task}
+                                  onDragStart={handleGanttDragStart}
+                                  isDragging={dragState.taskId === task.id}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
                 </div>
-              ))}
-            </div>
-          ))}
+              )
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Popups */}
-      {statusPopup && <StatusPopup statusPopup={statusPopup} tasks={tasks} onSelectStatus={selectStatus} />}
-      {indentPopup && <IndentPopup indentPopup={indentPopup} onSelectIndent={(id, level) => { changeIndent({ stopPropagation: () => {}, preventDefault: () => {} } as React.MouseEvent, id, level - (tasks.find(t => t.id === id)?.indent_level || 0)); setIndentPopup(null) }} />}
+      {/* ステータスポップアップ */}
+      {statusPopup && (
+        <StatusPopup
+          statusPopup={statusPopup}
+          tasks={tasks}
+          onSelectStatus={handleStatusSelect}
+        />
+      )}
 
-      {/* Modals */}
+      {/* タスクモーダル */}
       {showTaskModal && (
         <TaskModal
           mode={taskModalMode}
@@ -484,13 +623,20 @@ export default function KaetaWBS() {
           phases={phases}
           categories={categories}
           saving={saving}
-          onClose={() => { setShowTaskModal(false); setSelectedTask(null); resetEditingTask() }}
+          onClose={() => {
+            setShowTaskModal(false)
+            setSelectedTask(null)
+          }}
           onSave={handleSaveTask}
           onDelete={taskModalMode === 'edit' ? handleDeleteTask : undefined}
-          onOpenCategoryModal={(phaseId) => { setShowTaskModal(false); setSelectedPhaseForCategory(phaseId); setShowCategoryModal(true) }}
+          onOpenCategoryModal={(phaseId) => {
+            setSelectedPhaseForCategory(phaseId)
+            setShowCategoryModal(true)
+          }}
         />
       )}
 
+      {/* フェーズモーダル */}
       {showPhaseModal && (
         <PhaseModal
           phases={phases}
@@ -505,6 +651,7 @@ export default function KaetaWBS() {
         />
       )}
 
+      {/* カテゴリモーダル */}
       {showCategoryModal && (
         <CategoryModal
           phases={phases}
@@ -516,7 +663,11 @@ export default function KaetaWBS() {
           editingCategory={editingCategory}
           setEditingCategory={setEditingCategory}
           onClose={() => setShowCategoryModal(false)}
-          onAddCategory={() => selectedPhaseForCategory && addCategory(newCategoryName, selectedPhaseForCategory)}
+          onAddCategory={() => {
+            if (selectedPhaseForCategory) {
+              addCategory(newCategoryName, selectedPhaseForCategory)
+            }
+          }}
           onUpdateCategory={(id, name) => updateCategory(id, name, phases, fetchTasks)}
           onDeleteCategory={(id) => deleteCategory(id, phases, tasks, fetchTasks)}
           onMoveCategoryOrder={moveCategoryOrder}

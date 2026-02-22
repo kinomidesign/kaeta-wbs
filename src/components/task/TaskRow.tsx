@@ -172,17 +172,21 @@ export const TaskRow: React.FC<TaskRowProps> = ({
         </div>
 
         <div className="col-span-3 flex items-center justify-center">
-          <button
-            type="button"
-            draggable={false}
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => onDateClick(task.start_date, e)}
-            className="text-xs hover:underline cursor-pointer"
-            style={{ color: '#009EA4' }}
-            title="クリックで開始日にスクロール"
-          >
-            {formatDateDisplay(task.start_date)} - {formatDateDisplay(task.end_date)}
-          </button>
+          {task.start_date && task.end_date ? (
+            <button
+              type="button"
+              draggable={false}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => onDateClick(task.start_date!, e)}
+              className="text-xs hover:underline cursor-pointer"
+              style={{ color: '#009EA4' }}
+              title="クリックで開始日にスクロール"
+            >
+              {formatDateDisplay(task.start_date)} - {formatDateDisplay(task.end_date)}
+            </button>
+          ) : (
+            <span className="text-xs text-dashboard-text-muted">日付未設定</span>
+          )}
         </div>
 
         <div className="col-span-2 flex items-center justify-center">

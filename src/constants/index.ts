@@ -16,8 +16,25 @@ export const DEFAULT_PHASES = ['Phase 1', 'Phase 1.5', 'Phase 2'] as const
 // ガントチャートの1日あたりの幅（px）
 export const DAY_WIDTH = 32
 
-// タイムライン表示日数
+// タイムライン基準日（2025年1月1日）
+export const TIMELINE_BASE_DATE = new Date('2025-01-01')
+
+// タイムライン表示範囲（基準日から前後）
+export const TIMELINE_DAYS_BEFORE = 365
+export const TIMELINE_DAYS_AFTER = 365
+
+// 総タイムライン日数（730日 = 約2年分）
+export const TOTAL_TIMELINE_DAYS = TIMELINE_DAYS_BEFORE + TIMELINE_DAYS_AFTER
+
+// タイムライン表示日数（後方互換性のため残す）
 export const TIMELINE_DAYS = 365
+
+// タイムラインの開始日を取得
+export const getTimelineStartDate = (): Date => {
+  const start = new Date(TIMELINE_BASE_DATE)
+  start.setDate(start.getDate() - TIMELINE_DAYS_BEFORE)
+  return start
+}
 
 // インデントの最大レベル
 export const MAX_INDENT_LEVEL = 3

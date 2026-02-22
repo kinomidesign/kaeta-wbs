@@ -1,6 +1,7 @@
 import React from 'react'
 import { OWNERS } from '@/constants'
 import { getTodayString } from '@/utils/date'
+import type { CurrentViewDate } from '@/types'
 
 interface HeaderProps {
   saving: boolean
@@ -13,6 +14,8 @@ interface HeaderProps {
   onShowCategoryModal: () => void
   onAddTask: () => void
   onScrollToDate: (date: string) => void
+  onScrollToYear: (year: number) => void
+  currentViewDate?: CurrentViewDate
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -25,8 +28,12 @@ export const Header: React.FC<HeaderProps> = ({
   onShowPhaseModal,
   onShowCategoryModal,
   onAddTask,
-  onScrollToDate
+  onScrollToDate,
+  onScrollToYear,
+  currentViewDate
 }) => {
+  const currentYear = new Date().getFullYear()
+  const nextYear = currentYear + 1
   return (
     <div className="bg-dashboard-card border-b border-dashboard-border px-6 py-4 sticky top-0 z-30">
       <div className="flex items-center justify-between mb-4">
@@ -62,10 +69,26 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Filters */}
       <div className="flex gap-4 items-center flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-dashboard-text-muted">期間:</span>
+          <span className="text-sm text-dashboard-text-muted">表示中:</span>
           <span className="text-sm font-medium text-dashboard-text-main">
-            {new Date().getFullYear()}年
+            {currentViewDate ? `${currentViewDate.year}年${currentViewDate.month}月` : `${currentYear}年`}
           </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onScrollToYear(currentYear)}
+            className="px-2 py-1 text-xs rounded border border-dashboard-border hover:bg-gray-50 transition-colors"
+            title={`${currentYear}年へ移動`}
+          >
+            今年
+          </button>
+          <button
+            onClick={() => onScrollToYear(nextYear)}
+            className="px-2 py-1 text-xs rounded border border-dashboard-border hover:bg-gray-50 transition-colors"
+            title={`${nextYear}年へ移動`}
+          >
+            来年
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-dashboard-text-muted">フェーズ:</span>
