@@ -5,6 +5,7 @@ import * as dateFnsLocale from 'date-fns/locale'
 import type { Phase, Category, EditingTask } from '@/types'
 import { OWNERS, STATUSES } from '@/constants'
 import { formatDateString } from '@/utils/date'
+import { getStatusDotColor } from '@/utils/style'
 
 const ja = dateFnsLocale.ja
 
@@ -97,18 +98,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const phaseCategories = selectedPhase
     ? categories.filter(c => c.phase_id === selectedPhase.id).sort((a, b) => a.sort_order - b.sort_order)
     : []
-
-  // ステータスの色（ピル用）
-  const getStatusPillStyle = (status: string, isSelected: boolean) => {
-    if (!isSelected) return 'bg-gray-100 text-gray-500'
-    switch (status) {
-      case '未着手': return 'bg-gray-200 text-gray-700'
-      case '進行中': return 'bg-blue-100 text-blue-700'
-      case '完了': return 'bg-green-100 text-green-700'
-      case '保留': return 'bg-yellow-100 text-yellow-700'
-      default: return 'bg-gray-200 text-gray-700'
-    }
-  }
 
   return (
     <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-8" onClick={onClose}>
@@ -222,8 +211,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <button
                   type="button"
                   onClick={() => openDropdown('status')}
-                  className={`inline-block text-sm px-2 py-0.5 rounded-full cursor-pointer ${getStatusPillStyle(editingTask.status, true)}`}
+                  className="inline-flex items-center gap-1.5 text-sm px-2 py-0.5 rounded-full cursor-pointer border border-gray-200 bg-white text-gray-700 hover:bg-gray-100"
                 >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotColor(editingTask.status)}`}></span>
                   {editingTask.status}
                 </button>
                 {activeDropdown === 'status' && (
@@ -236,10 +226,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                           setEditingTask({ ...editingTask, status: s })
                           setActiveDropdown(null)
                         }}
-                        className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 ${
+                        className={`w-full px-3 py-2 text-sm text-left hover:bg-gray-100 flex items-center gap-2 ${
                           editingTask.status === s ? 'bg-gray-50 font-medium' : ''
                         }`}
                       >
+                        <span className={`w-2 h-2 rounded-full ${getStatusDotColor(s)}`}></span>
                         {s}
                       </button>
                     ))}

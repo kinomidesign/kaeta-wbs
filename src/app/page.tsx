@@ -421,9 +421,10 @@ export default function KaetaWBS() {
               <div key={phase}>
                 {/* フェーズヘッダー */}
                 <div
-                  className={`sticky top-7 z-10 bg-gray-100 px-4 h-10 font-bold text-dashboard-text-main flex items-center gap-2 cursor-pointer hover:bg-gray-200 border-b border-dashboard-border ${
+                  className={`sticky top-7 z-10 bg-gray-100 h-10 font-bold text-dashboard-text-main flex items-center cursor-pointer hover:bg-gray-200 border-b border-dashboard-border ${
                     taskDragState.draggingTaskId && taskDragState.dropTarget?.phase === phase && !taskDragState.dropTarget?.category ? 'bg-blue-100' : ''
                   }`}
+                  style={{ paddingLeft: '16px', paddingRight: '16px' }}
                   onClick={() => togglePhaseAccordion(phase)}
                   onDragOver={(e) => {
                     e.preventDefault()
@@ -431,8 +432,8 @@ export default function KaetaWBS() {
                   }}
                   onDrop={(e) => handleDropToPhase(e, phase)}
                 >
-                  <span className={`transform transition-transform ${isPhaseOpen ? 'rotate-90' : ''}`}>▶</span>
-                  {phase}
+                  <span className={`w-5 h-5 flex items-center justify-center transform transition-transform ${isPhaseOpen ? 'rotate-90' : ''}`}>▶</span>
+                  <span className="ml-1">{phase}</span>
                 </div>
 
                 {/* カテゴリ */}
@@ -444,10 +445,10 @@ export default function KaetaWBS() {
                       {/* カテゴリヘッダー */}
                       {category && (
                         <div
-                          className={`sticky top-[68px] z-10 bg-gray-50 h-10 text-sm font-medium text-dashboard-text-muted flex items-center gap-2 cursor-pointer hover:bg-gray-100 border-b border-dashboard-border ${
+                          className={`sticky top-[68px] z-10 bg-gray-50 h-10 text-sm font-medium text-dashboard-text-muted flex items-center cursor-pointer hover:bg-gray-100 border-b border-dashboard-border ${
                             taskDragState.draggingTaskId && taskDragState.dropTarget?.phase === phase && taskDragState.dropTarget?.category === category ? 'bg-blue-50' : ''
                           }`}
-                          style={{ paddingLeft: '32px', paddingRight: '16px' }}
+                          style={{ paddingLeft: '40px', paddingRight: '16px' }}
                           onClick={() => toggleCategoryAccordion(phase, category)}
                           onDragOver={(e) => {
                             e.preventDefault()
@@ -455,8 +456,8 @@ export default function KaetaWBS() {
                           }}
                           onDrop={(e) => handleDropToCategory(e, phase, category)}
                         >
-                          <span className={`transform transition-transform text-xs ${isCategoryOpen ? 'rotate-90' : ''}`}>▶</span>
-                          {category}
+                          <span className={`w-5 h-5 flex items-center justify-center transform transition-transform text-xs ${isCategoryOpen ? 'rotate-90' : ''}`}>▶</span>
+                          <span className="ml-1">{category}</span>
                           <span className="text-xs text-dashboard-text-muted ml-1">({categoryTasks.length})</span>
                         </div>
                       )}
@@ -510,7 +511,7 @@ export default function KaetaWBS() {
 
         {/* リサイズハンドル */}
         <div
-          className={`w-1 cursor-col-resize hover:rgb(0, 158, 164) flex-shrink-0 transition-colors ${isResizing ? 'bg-accent-blue' : 'bg-gray-200'}`}
+          className={`w-1 cursor-col-resize hover:bg-accent-blue flex-shrink-0 transition-colors ${isResizing ? 'bg-accent-blue' : 'bg-gray-200'}`}
           onMouseDown={handleResizeStart}
         />
 
@@ -544,7 +545,7 @@ export default function KaetaWBS() {
                       <div key={`${phase}-${category}`}>
                         {/* カテゴリ行（ドラッグ対象外） */}
                         {category && (
-                          <div className="h-7 border-b border-gray-100 bg-gray-50/50" />
+                          <div className="h-10 border-b border-gray-100 bg-gray-50/50" />
                         )}
 
                         {/* タスクバー */}

@@ -1,7 +1,7 @@
 import React from 'react'
 import { IndentDecrease, IndentIncrease } from 'lucide-react'
 import type { Task, TaskDragState } from '@/types'
-import { getOwnerColor, getStatusColor } from '@/utils/style'
+import { getOwnerColor, getStatusDotColor } from '@/utils/style'
 import { formatDateDisplay } from '@/utils/date'
 
 interface TaskRowProps {
@@ -55,7 +55,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       {isDropTargetBefore && (
         <div
           className="absolute top-0 left-0 right-0 h-1 bg-accent-blue z-10"
-          style={{ marginLeft: `${16 + indentLevel * 24}px` }}
+          style={{ marginLeft: `${64 + indentLevel * 24}px` }}
         />
       )}
 
@@ -78,26 +78,26 @@ export const TaskRow: React.FC<TaskRowProps> = ({
           onDrop(e, task, position)
         }}
         onClick={() => onTaskClick(task)}
-        className={`group/task px-4 h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
+        className={`group/task h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
           ${selectedTaskId === task.id ? 'bg-blue-50' : ''}
           ${isDragging ? 'opacity-50 bg-gray-100' : ''}
         `}
-        style={{ paddingLeft: `${16 + indentLevel * 24}px` }}
+        style={{ paddingLeft: `${64 + indentLevel * 24}px`, paddingRight: '16px' }}
       >
         {/* 階層構造の接続線 */}
         {indentLevel > 0 && (
-          <div className="absolute left-0 top-0 bottom-0 pointer-events-none" style={{ width: `${16 + indentLevel * 24}px` }}>
+          <div className="absolute left-0 top-0 bottom-0 pointer-events-none" style={{ width: `${64 + indentLevel * 24}px` }}>
             {Array.from({ length: indentLevel }).map((_, i) => (
               <div
                 key={i}
                 className="absolute top-0 bottom-0 w-px bg-gray-200 group-hover/task:bg-gray-300"
-                style={{ left: `${16 + i * 24 + 8}px` }}
+                style={{ left: `${64 + i * 24 + 8}px` }}
               />
             ))}
             <div
               className="absolute h-px bg-gray-200 group-hover/task:bg-gray-300"
               style={{
-                left: `${16 + (indentLevel - 1) * 24 + 8}px`,
+                left: `${64 + (indentLevel - 1) * 24 + 8}px`,
                 top: '50%',
                 width: '16px'
               }}
@@ -166,7 +166,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
         </div>
 
         <div className="col-span-2 flex items-center justify-center">
-          <span className={`text-xs px-2 py-1 rounded border ${getOwnerColor(task.owner)}`}>
+          <span className={`text-xs px-2 py-1 rounded border whitespace-nowrap ${getOwnerColor(task.owner)}`}>
             {task.owner}
           </span>
         </div>
@@ -195,9 +195,10 @@ export const TaskRow: React.FC<TaskRowProps> = ({
             draggable={false}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onStatusClick(task, e); }}
-            className={`text-xs px-2 py-1 rounded cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(task.status)}`}
+            className="text-xs px-2 py-1 rounded-full cursor-pointer hover:bg-gray-100 transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700"
             title="クリックでステータス変更"
           >
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotColor(task.status)}`}></span>
             {task.status}
           </button>
         </div>
@@ -207,7 +208,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       {isDropTargetAfter && (
         <div
           className="absolute bottom-0 left-0 right-0 h-1 bg-accent-blue z-10"
-          style={{ marginLeft: `${16 + indentLevel * 24}px` }}
+          style={{ marginLeft: `${64 + indentLevel * 24}px` }}
         />
       )}
     </div>
