@@ -55,7 +55,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       {isDropTargetBefore && (
         <div
           className="absolute top-0 left-0 right-0 h-1 bg-accent-blue z-10"
-          style={{ marginLeft: `${16 + indentLevel * 24}px` }}
+          style={{ marginLeft: `${40 + indentLevel * 24}px` }}
         />
       )}
 
@@ -78,10 +78,11 @@ export const TaskRow: React.FC<TaskRowProps> = ({
           onDrop(e, task, position)
         }}
         onClick={() => onTaskClick(task)}
-        className={`group/task px-4 h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
+        className={`group/task h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
           ${selectedTaskId === task.id ? 'bg-blue-50' : ''}
           ${isDragging ? 'opacity-50 bg-gray-100' : ''}
         `}
+        style={{ paddingLeft: '40px', paddingRight: '16px' }}
       >
         <div className="col-span-5 flex items-center gap-2">
           {/* インデント用スペーサー */}
@@ -212,7 +213,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       {isDropTargetAfter && (
         <div
           className="absolute bottom-0 left-0 right-0 h-1 bg-accent-blue z-10"
-          style={{ marginLeft: `${16 + indentLevel * 24}px` }}
+          style={{ marginLeft: `${40 + indentLevel * 24}px` }}
         />
       )}
     </div>
