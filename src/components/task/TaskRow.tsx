@@ -55,7 +55,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       {isDropTargetBefore && (
         <div
           className="absolute top-0 left-0 right-0 h-1 bg-accent-blue z-10"
-          style={{ marginLeft: `${64 + indentLevel * 24}px` }}
+          style={{ marginLeft: `${16 + indentLevel * 24}px` }}
         />
       )}
 
@@ -78,36 +78,36 @@ export const TaskRow: React.FC<TaskRowProps> = ({
           onDrop(e, task, position)
         }}
         onClick={() => onTaskClick(task)}
-        className={`group/task h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
+        className={`group/task px-4 h-12 border-b border-gray-100 cursor-grab hover:bg-gray-50 grid grid-cols-12 gap-2 items-center transition-all
           ${selectedTaskId === task.id ? 'bg-blue-50' : ''}
           ${isDragging ? 'opacity-50 bg-gray-100' : ''}
         `}
-        style={{ paddingLeft: `${64 + indentLevel * 24}px`, paddingRight: '16px' }}
       >
-        {/* 階層構造の接続線 */}
-        {indentLevel > 0 && (
-          <div className="absolute left-0 top-0 bottom-0 pointer-events-none" style={{ width: `${64 + indentLevel * 24}px` }}>
-            {Array.from({ length: indentLevel }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute top-0 bottom-0 w-px bg-gray-200 group-hover/task:bg-gray-300"
-                style={{ left: `${64 + i * 24 + 8}px` }}
-              />
-            ))}
-            <div
-              className="absolute h-px bg-gray-200 group-hover/task:bg-gray-300"
-              style={{
-                left: `${64 + (indentLevel - 1) * 24 + 8}px`,
-                top: '50%',
-                width: '16px'
-              }}
-            />
-          </div>
-        )}
-
         <div className="col-span-5 flex items-center gap-2">
+          {/* インデント用スペーサー */}
+          {indentLevel > 0 && (
+            <div className="flex-shrink-0 relative" style={{ width: `${indentLevel * 24}px` }}>
+              {/* 階層構造の接続線 */}
+              {Array.from({ length: indentLevel }).map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute top-0 w-px bg-gray-200 group-hover/task:bg-gray-300"
+                  style={{ left: `${i * 24 + 8}px`, height: '48px', top: '-18px' }}
+                />
+              ))}
+              <div
+                className="absolute h-px bg-gray-200 group-hover/task:bg-gray-300"
+                style={{
+                  left: `${(indentLevel - 1) * 24 + 8}px`,
+                  top: '50%',
+                  width: '16px',
+                  marginTop: '-18px'
+                }}
+              />
+            </div>
+          )}
           {/* トグルボタン（子タスクがある場合）またはドラッグハンドル */}
-          <div className="flex items-center gap-1">
+          <div className="flex-shrink-0 flex items-center gap-1">
             {hasChildren ? (
               <button
                 type="button"
@@ -194,12 +194,16 @@ export const TaskRow: React.FC<TaskRowProps> = ({
             type="button"
             draggable={false}
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onStatusClick(task, e); }}
-            className="text-xs px-2 py-1 rounded-full cursor-pointer hover:bg-gray-100 transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700"
+            onClick={(e) => {
+              e.stopPropagation()
+              e.nativeEvent.stopImmediatePropagation()
+              onStatusClick(task, e)
+            }}
+            className="text-xs px-2 py-1 rounded-full cursor-pointer hover:bg-gray-100 transition-colors flex items-center gap-1.5 border border-gray-200 bg-white text-gray-700 whitespace-nowrap"
             title="クリックでステータス変更"
           >
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotColor(task.status)}`}></span>
-            {task.status}
+            <span className="truncate">{task.status}</span>
           </button>
         </div>
       </div>
@@ -208,7 +212,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       {isDropTargetAfter && (
         <div
           className="absolute bottom-0 left-0 right-0 h-1 bg-accent-blue z-10"
-          style={{ marginLeft: `${64 + indentLevel * 24}px` }}
+          style={{ marginLeft: `${16 + indentLevel * 24}px` }}
         />
       )}
     </div>
