@@ -117,6 +117,7 @@ export const useTasks = ({ phases, categories }: UseTasksOptions): UseTasksRetur
 
     if (error) {
       console.error('Error adding task:', error)
+      alert(`タスクの追加に失敗しました: ${error.message}`)
       setSaving(false)
       return null
     }
