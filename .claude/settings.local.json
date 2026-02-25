@@ -12,7 +12,8 @@
       "Bash(dir:*)",
       "Bash(claude mcp add:*)",
       "Bash(claude mcp:*)",
-      "mcp__notion__notion-fetch"
+      "mcp__notion__notion-fetch",
+      "Bash(unzip:*)"
     ]
   }
 }

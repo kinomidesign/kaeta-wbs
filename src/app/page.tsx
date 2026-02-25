@@ -463,44 +463,67 @@ export default function KaetaWBS() {
                       )}
 
                       {/* タスク */}
-                      {(category ? isCategoryOpen : true) && categoryTasks.map((task, taskIndex) => {
-                        const hasChildren = categoryTasks.some((t, i) =>
-                          i > taskIndex && (t.indent_level || 0) > (task.indent_level || 0)
-                        )
-                        const isHidden = (() => {
-                          for (let i = taskIndex - 1; i >= 0; i--) {
-                            const prevTask = categoryTasks[i]
-                            if ((prevTask.indent_level || 0) < (task.indent_level || 0)) {
-                              if (collapsedTasks[prevTask.id]) return true
-                              break
-                            }
-                          }
-                          return false
-                        })()
+                      {(category ? isCategoryOpen : true) && (
+                        <>
+                          {categoryTasks.map((task, taskIndex) => {
+                            const hasChildren = categoryTasks.some((t, i) =>
+                              i > taskIndex && (t.indent_level || 0) > (task.indent_level || 0)
+                            )
+                            const isHidden = (() => {
+                              for (let i = taskIndex - 1; i >= 0; i--) {
+                                const prevTask = categoryTasks[i]
+                                if ((prevTask.indent_level || 0) < (task.indent_level || 0)) {
+                                  if (collapsedTasks[prevTask.id]) return true
+                                  break
+                                }
+                              }
+                              return false
+                            })()
 
-                        return (
-                          <TaskRow
-                            key={task.id}
-                            task={task}
-                            taskIndex={taskIndex}
-                            categoryTasks={categoryTasks}
-                            selectedTaskId={selectedTask?.id ?? null}
-                            taskDragState={taskDragState}
-                            collapsedTasks={collapsedTasks}
-                            onTaskClick={handleTaskClick}
-                            onDragStart={handleTaskDragStart}
-                            onDragEnd={handleTaskDragEnd}
-                            onDragOver={handleTaskDragOver}
-                            onDrop={handleTaskDrop}
-                            onStatusClick={handleStatusClick}
-                            onDateClick={handleDateClick}
-                            onToggleCollapse={toggleTaskCollapse}
-                            onChangeIndent={handleChangeIndent}
-                            hasChildren={hasChildren}
-                            isHidden={isHidden}
-                          />
-                        )
-                      })}
+                            return (
+                              <TaskRow
+                                key={task.id}
+                                task={task}
+                                taskIndex={taskIndex}
+                                categoryTasks={categoryTasks}
+                                selectedTaskId={selectedTask?.id ?? null}
+                                taskDragState={taskDragState}
+                                collapsedTasks={collapsedTasks}
+                                onTaskClick={handleTaskClick}
+                                onDragStart={handleTaskDragStart}
+                                onDragEnd={handleTaskDragEnd}
+                                onDragOver={handleTaskDragOver}
+                                onDrop={handleTaskDrop}
+                                onStatusClick={handleStatusClick}
+                                onDateClick={handleDateClick}
+                                onToggleCollapse={toggleTaskCollapse}
+                                onChangeIndent={handleChangeIndent}
+                                hasChildren={hasChildren}
+                                isHidden={isHidden}
+                              />
+                            )
+                          })}
+                          {/* カテゴリ内タスク追加ボタン */}
+                          <div
+                            className="h-10 border-b border-gray-100 flex items-center cursor-pointer hover:bg-blue-50/50 transition-colors group/addtask"
+                            style={{ paddingLeft: '40px', paddingRight: '16px' }}
+                            onClick={() => {
+                              setEditingTask({
+                                ...initialEditingTask,
+                                phase,
+                                category
+                              })
+                              setTaskModalMode('add')
+                              setShowTaskModal(true)
+                            }}
+                          >
+                            <span className="text-xs text-dashboard-text-muted group-hover/addtask:text-accent-blue flex items-center gap-1">
+                              <span className="text-base leading-none">＋</span>
+                              タスクを追加
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )
                 })}
@@ -549,70 +572,76 @@ export default function KaetaWBS() {
                         )}
 
                         {/* タスクバー */}
-                        {(category ? isCategoryOpen : true) && categoryTasks.map((task, taskIndex) => {
-                          const isHidden = (() => {
-                            for (let i = taskIndex - 1; i >= 0; i--) {
-                              const prevTask = categoryTasks[i]
-                              if ((prevTask.indent_level || 0) < (task.indent_level || 0)) {
-                                if (collapsedTasks[prevTask.id]) return true
-                                break
-                              }
-                            }
-                            return false
-                          })()
+                        {(category ? isCategoryOpen : true) && (
+                          <>
+                            {categoryTasks.map((task, taskIndex) => {
+                              const isHidden = (() => {
+                                for (let i = taskIndex - 1; i >= 0; i--) {
+                                  const prevTask = categoryTasks[i]
+                                  if ((prevTask.indent_level || 0) < (task.indent_level || 0)) {
+                                    if (collapsedTasks[prevTask.id]) return true
+                                    break
+                                  }
+                                }
+                                return false
+                              })()
 
-                          if (isHidden) return null
+                              if (isHidden) return null
 
-                          const hasDate = task.start_date && task.end_date
+                              const hasDate = task.start_date && task.end_date
 
-                          return (
-                            <div
-                              key={task.id}
-                              className="h-12 border-b border-gray-100 relative cursor-crosshair hover:bg-blue-50/30 group/taskrow"
-                              onMouseDown={(e) => {
-                                // ガントバー以外の領域でドラッグ開始
-                                handleTaskDateDragStart(e, task.id, task.phase, task.category)
-                              }}
-                            >
-                              {/* 日付設定済みの場合はガントバーを表示 */}
-                              {hasDate && (
-                                <div className="absolute top-3 z-10">
-                                  <GanttBar
-                                    task={task}
-                                    onDragStart={handleGanttDragStart}
-                                    isDragging={dragState.taskId === task.id}
-                                  />
+                              return (
+                                <div
+                                  key={task.id}
+                                  className="h-12 border-b border-gray-100 relative cursor-crosshair hover:bg-blue-50/30 group/taskrow"
+                                  onMouseDown={(e) => {
+                                    // ガントバー以外の領域でドラッグ開始
+                                    handleTaskDateDragStart(e, task.id, task.phase, task.category)
+                                  }}
+                                >
+                                  {/* 日付設定済みの場合はガントバーを表示 */}
+                                  {hasDate && (
+                                    <div className="absolute top-3 z-10">
+                                      <GanttBar
+                                        task={task}
+                                        onDragStart={handleGanttDragStart}
+                                        isDragging={dragState.taskId === task.id}
+                                      />
+                                    </div>
+                                  )}
+                                  {/* 日付未設定時のヒント表示 */}
+                                  {!hasDate && (
+                                    <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center opacity-0 group-hover/taskrow:opacity-100 transition-opacity pointer-events-none z-0">
+                                      <span className="text-xs text-gray-400 bg-white px-2 py-1 rounded border border-dashed border-gray-300">
+                                        ドラッグで日付を設定
+                                      </span>
+                                    </div>
+                                  )}
+                                  {/* ドラッグ中のプレビュー */}
+                                  {isNewTaskDragging && draggingTaskId === task.id && (() => {
+                                    const preview = getPreviewInfo()
+                                    if (!preview) return null
+                                    return (
+                                      <div
+                                        className="absolute top-3 h-6 bg-blue-200 border-2 border-blue-400 rounded opacity-70 z-20"
+                                        style={{ left: preview.left, width: preview.width }}
+                                      >
+                                        <span className="absolute -top-5 left-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
+                                          {preview.startDate.slice(5)}
+                                        </span>
+                                        <span className="absolute -top-5 right-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
+                                          {preview.endDate.slice(5)}
+                                        </span>
+                                      </div>
+                                    )
+                                  })()}
                                 </div>
-                              )}
-                              {/* 日付未設定時のヒント表示 */}
-                              {!hasDate && (
-                                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center opacity-0 group-hover/taskrow:opacity-100 transition-opacity pointer-events-none z-0">
-                                  <span className="text-xs text-gray-400 bg-white px-2 py-1 rounded border border-dashed border-gray-300">
-                                    ドラッグで日付を設定
-                                  </span>
-                                </div>
-                              )}
-                              {/* ドラッグ中のプレビュー */}
-                              {isNewTaskDragging && draggingTaskId === task.id && (() => {
-                                const preview = getPreviewInfo()
-                                if (!preview) return null
-                                return (
-                                  <div
-                                    className="absolute top-3 h-6 bg-blue-200 border-2 border-blue-400 rounded opacity-70 z-20"
-                                    style={{ left: preview.left, width: preview.width }}
-                                  >
-                                    <span className="absolute -top-5 left-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
-                                      {preview.startDate.slice(5)}
-                                    </span>
-                                    <span className="absolute -top-5 right-0 text-xs bg-gray-800 text-white px-1 rounded whitespace-nowrap">
-                                      {preview.endDate.slice(5)}
-                                    </span>
-                                  </div>
-                                )
-                              })()}
-                            </div>
-                          )
-                        })}
+                              )
+                            })}
+                            {/* タスク追加ボタンに対応する空行 */}
+                            <div className="h-10 border-b border-gray-100" />
+                          </>
+                        )}
                       </div>
                     )
                   })}
