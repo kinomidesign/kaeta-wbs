@@ -15,6 +15,7 @@ interface CategoryModalProps {
   onUpdateCategory: (id: number, name: string) => void
   onDeleteCategory: (id: number) => void
   onMoveCategoryOrder: (categoryId: number, direction: 'up' | 'down') => void
+  onReorderCategories: (orderedIds: number[]) => void
 }
 
 export const CategoryModal: React.FC<CategoryModalProps> = ({
@@ -30,12 +31,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   onAddCategory,
   onUpdateCategory,
   onDeleteCategory,
-  onMoveCategoryOrder
+  onReorderCategories
 }) => {
   const [addingToPhase, setAddingToPhase] = useState<number | null>(null)
   const [localNewName, setLocalNewName] = useState('')
   const addInputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
+
+  // D&D state
+  const [draggedCatId, setDraggedCatId] = useState<number | null>(null)
+  const [dragOverCatId, setDragOverCatId] = useState<number | null>(null)
+  const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after'>('after')
 
   useEffect(() => {
     if (addingToPhase !== null && addInputRef.current) {
@@ -54,7 +60,6 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     if (!localNewName.trim()) return
     setNewCategoryName(localNewName.trim())
     setSelectedPhaseForCategory(phaseId)
-    // Defer the add call to let state update
     setTimeout(() => {
       onAddCategory()
       setLocalNewName('')
@@ -78,6 +83,57 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     } else if (e.key === 'Escape') {
       setEditingCategory(null)
     }
+  }
+
+  // D&D handlers
+  const handleDragStart = (e: React.DragEvent, catId: number) => {
+    setDraggedCatId(catId)
+    e.dataTransfer.effectAllowed = 'move'
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '0.5'
+    }
+  }
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = '1'
+    }
+    setDraggedCatId(null)
+    setDragOverCatId(null)
+  }
+
+  const handleDragOver = (e: React.DragEvent, catId: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (draggedCatId === catId) return
+
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    const position = y < rect.height / 2 ? 'before' : 'after'
+    setDragOverCatId(catId)
+    setDragOverPosition(position)
+  }
+
+  const handleDrop = (e: React.DragEvent, phaseCategories: Category[]) => {
+    e.preventDefault()
+    if (!draggedCatId || !dragOverCatId || draggedCatId === dragOverCatId) {
+      setDraggedCatId(null)
+      setDragOverCatId(null)
+      return
+    }
+
+    const ordered = phaseCategories.map(c => c.id)
+    const fromIdx = ordered.indexOf(draggedCatId)
+    const toIdx = ordered.indexOf(dragOverCatId)
+    if (fromIdx === -1 || toIdx === -1) return
+
+    ordered.splice(fromIdx, 1)
+    const insertIdx = dragOverPosition === 'before' ? ordered.indexOf(dragOverCatId) : ordered.indexOf(dragOverCatId) + 1
+    ordered.splice(insertIdx, 0, draggedCatId)
+
+    onReorderCategories(ordered)
+    setDraggedCatId(null)
+    setDragOverCatId(null)
   }
 
   return (
@@ -120,105 +176,101 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
                 {/* Category list */}
                 <div>
-                  {phaseCategories.map((cat, index) => (
-                    <div
-                      key={cat.id}
-                      className="group/catitem flex items-center gap-1.5 px-3 py-0 border-b border-gray-50 hover:bg-gray-50/80 transition-colors"
-                    >
-                      {editingCategory?.id === cat.id ? (
-                        // Edit mode
-                        <div className="flex-1 flex items-center gap-2 py-1.5">
-                          <input
-                            ref={editInputRef}
-                            type="text"
-                            value={editingCategory.name}
-                            onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
-                            onKeyDown={(e) => handleEditKeyDown(e, cat.id)}
-                            onBlur={() => {
-                              if (editingCategory.name.trim()) {
-                                onUpdateCategory(cat.id, editingCategory.name)
-                              }
-                              setEditingCategory(null)
-                            }}
-                            className="flex-1 text-sm px-2 py-1 border border-accent-blue rounded-md outline-none focus:ring-2 focus:ring-accent-blue/50 bg-white"
-                          />
-                        </div>
-                      ) : (
-                        // View mode
-                        <>
-                          {/* Sort up/down */}
-                          <div className="flex flex-col opacity-0 group-hover/catitem:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => onMoveCategoryOrder(cat.id, 'up')}
-                              disabled={index === 0}
-                              className="w-4 h-3 flex items-center justify-center text-gray-400 hover:text-dashboard-text-main disabled:opacity-0 disabled:cursor-default transition-colors"
-                              title="上へ移動"
-                            >
-                              <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor">
-                                <path d="M4 0L8 5H0L4 0Z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => onMoveCategoryOrder(cat.id, 'down')}
-                              disabled={index === phaseCategories.length - 1}
-                              className="w-4 h-3 flex items-center justify-center text-gray-400 hover:text-dashboard-text-main disabled:opacity-0 disabled:cursor-default transition-colors"
-                              title="下へ移動"
-                            >
-                              <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor">
-                                <path d="M4 5L0 0h8L4 5Z" />
-                              </svg>
-                            </button>
-                          </div>
+                  {phaseCategories.map((cat) => {
+                    const showDropBefore = draggedCatId !== null && dragOverCatId === cat.id && dragOverPosition === 'before' && draggedCatId !== cat.id
+                    const showDropAfter = draggedCatId !== null && dragOverCatId === cat.id && dragOverPosition === 'after' && draggedCatId !== cat.id
 
-                          {/* Drag handle (grip dots) */}
-                          <span className="w-4 flex items-center justify-center text-gray-300 opacity-0 group-hover/catitem:opacity-100 transition-opacity cursor-grab">
-                            <svg width="6" height="10" viewBox="0 0 6 10" fill="currentColor">
-                              <circle cx="1.5" cy="1.5" r="1" />
-                              <circle cx="4.5" cy="1.5" r="1" />
-                              <circle cx="1.5" cy="5" r="1" />
-                              <circle cx="4.5" cy="5" r="1" />
-                              <circle cx="1.5" cy="8.5" r="1" />
-                              <circle cx="4.5" cy="8.5" r="1" />
-                            </svg>
-                          </span>
+                    return (
+                      <div
+                        key={cat.id}
+                        draggable={editingCategory?.id !== cat.id}
+                        onDragStart={(e) => handleDragStart(e, cat.id)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => handleDragOver(e, cat.id)}
+                        onDrop={(e) => handleDrop(e, phaseCategories)}
+                        className={`group/catitem relative flex items-center gap-1.5 px-3 py-0 border-b border-gray-50 hover:bg-gray-50/80 transition-colors ${
+                          draggedCatId === cat.id ? 'opacity-50' : ''
+                        }`}
+                      >
+                        {/* Drop indicator (before) */}
+                        {showDropBefore && (
+                          <div className="absolute top-0 left-3 right-3 h-0.5 bg-accent-blue-text rounded-full -translate-y-px z-10" />
+                        )}
 
-                          {/* Category name */}
-                          <span
-                            className="flex-1 text-sm text-dashboard-text-main py-2 cursor-text min-w-0 truncate"
-                            onClick={() => setEditingCategory(cat)}
-                          >
-                            {cat.name}
-                          </span>
-
-                          {/* Action buttons (visible on hover) */}
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover/catitem:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => setEditingCategory(cat)}
-                              className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-dashboard-text-main hover:bg-gray-100 transition-colors"
-                              title="名前を変更"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 1.5l2.5 2.5M1.5 12.5l.5-2L9.5 3l2.5 2.5L4.5 13l-3 .5z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm(`「${cat.name}」を削除しますか？`)) {
-                                  onDeleteCategory(cat.id)
+                        {editingCategory?.id === cat.id ? (
+                          <div className="flex-1 flex items-center gap-2 py-1.5">
+                            <input
+                              ref={editInputRef}
+                              type="text"
+                              value={editingCategory.name}
+                              onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                              onKeyDown={(e) => handleEditKeyDown(e, cat.id)}
+                              onBlur={() => {
+                                if (editingCategory.name.trim()) {
+                                  onUpdateCategory(cat.id, editingCategory.name)
                                 }
+                                setEditingCategory(null)
                               }}
-                              className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                              title="削除"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M2.5 3.5h9M5.5 3.5V2a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1.5M3.5 3.5l.5 8.5a1 1 0 001 1h4a1 1 0 001-1l.5-8.5" />
-                              </svg>
-                            </button>
+                              className="flex-1 text-sm px-2 py-1 border border-accent-blue rounded-md outline-none focus:ring-2 focus:ring-accent-blue/50 bg-white"
+                            />
                           </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
+                        ) : (
+                          <>
+                            {/* Drag handle */}
+                            <span className="w-5 flex-shrink-0 flex items-center justify-center text-gray-300 opacity-0 group-hover/catitem:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                              <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
+                                <circle cx="2" cy="2" r="1.2" />
+                                <circle cx="6" cy="2" r="1.2" />
+                                <circle cx="2" cy="7" r="1.2" />
+                                <circle cx="6" cy="7" r="1.2" />
+                                <circle cx="2" cy="12" r="1.2" />
+                                <circle cx="6" cy="12" r="1.2" />
+                              </svg>
+                            </span>
+
+                            {/* Category name */}
+                            <span
+                              className="flex-1 text-sm text-dashboard-text-main py-2 cursor-text min-w-0 truncate"
+                              onClick={() => setEditingCategory(cat)}
+                            >
+                              {cat.name}
+                            </span>
+
+                            {/* Action buttons */}
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover/catitem:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => setEditingCategory(cat)}
+                                className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-dashboard-text-main hover:bg-gray-100 transition-colors"
+                                title="名前を変更"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M10 1.5l2.5 2.5M1.5 12.5l.5-2L9.5 3l2.5 2.5L4.5 13l-3 .5z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (confirm(`「${cat.name}」を削除しますか？`)) {
+                                    onDeleteCategory(cat.id)
+                                  }
+                                }}
+                                className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                title="削除"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M2.5 3.5h9M5.5 3.5V2a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1.5M3.5 3.5l.5 8.5a1 1 0 001 1h4a1 1 0 001-1l.5-8.5" />
+                                </svg>
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Drop indicator (after) */}
+                        {showDropAfter && (
+                          <div className="absolute bottom-0 left-3 right-3 h-0.5 bg-accent-blue-text rounded-full translate-y-px z-10" />
+                        )}
+                      </div>
+                    )
+                  })}
 
                   {/* Empty state */}
                   {phaseCategories.length === 0 && addingToPhase !== phase.id && (

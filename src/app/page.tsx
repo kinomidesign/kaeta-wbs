@@ -53,6 +53,7 @@ export default function KaetaWBS() {
     addPhase,
     updatePhase,
     deletePhase,
+    reorderPhases,
     newPhaseName,
     setNewPhaseName,
     editingPhase,
@@ -66,6 +67,7 @@ export default function KaetaWBS() {
     updateCategory,
     deleteCategory,
     moveCategoryOrder,
+    reorderCategories,
     newCategoryName,
     setNewCategoryName,
     selectedPhaseForCategory,
@@ -696,6 +698,7 @@ export default function KaetaWBS() {
           onAddPhase={() => addPhase(newPhaseName)}
           onUpdatePhase={(id, name) => updatePhase(id, name, tasks, fetchTasks)}
           onDeletePhase={(id) => deletePhase(id, tasks, fetchTasks)}
+          onReorderPhases={reorderPhases}
         />
       )}
 
@@ -719,6 +722,7 @@ export default function KaetaWBS() {
           onUpdateCategory={(id, name) => updateCategory(id, name, phases, fetchTasks)}
           onDeleteCategory={(id) => deleteCategory(id, phases, tasks, fetchTasks)}
           onMoveCategoryOrder={moveCategoryOrder}
+          onReorderCategories={reorderCategories}
         />
       )}
     </div>

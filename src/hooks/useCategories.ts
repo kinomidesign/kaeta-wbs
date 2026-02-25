@@ -20,6 +20,7 @@ interface UseCategoriesReturn {
     fetchTasks: () => Promise<void>
   ) => Promise<boolean>
   moveCategoryOrder: (categoryId: number, direction: 'up' | 'down') => Promise<void>
+  reorderCategories: (orderedIds: number[]) => Promise<void>
   // モーダル用の状態
   newCategoryName: string
   setNewCategoryName: React.Dispatch<React.SetStateAction<string>>
@@ -201,6 +202,23 @@ export const useCategories = (): UseCategoriesReturn => {
     ])
   }
 
+  // カテゴリの並び順を一括更新（D&D用）
+  const reorderCategories = async (orderedIds: number[]) => {
+    // 楽観的更新
+    setCategories(prev => prev.map(c => {
+      const idx = orderedIds.indexOf(c.id)
+      if (idx !== -1) return { ...c, sort_order: idx + 1 }
+      return c
+    }))
+
+    // DB一括更新
+    await Promise.all(
+      orderedIds.map((id, idx) =>
+        supabase.from('categories').update({ sort_order: idx + 1 }).eq('id', id)
+      )
+    )
+  }
+
   return {
     categories,
     setCategories,
@@ -209,6 +227,7 @@ export const useCategories = (): UseCategoriesReturn => {
     updateCategory,
     deleteCategory,
     moveCategoryOrder,
+    reorderCategories,
     newCategoryName,
     setNewCategoryName,
     selectedPhaseForCategory,

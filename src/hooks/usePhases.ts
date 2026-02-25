@@ -11,6 +11,7 @@ interface UsePhasesReturn {
   addPhase: (name: string) => Promise<Phase | null>
   updatePhase: (id: number, name: string, tasks: Task[], fetchTasks: () => Promise<void>) => Promise<boolean>
   deletePhase: (id: number, tasks: Task[], fetchTasks: () => Promise<void>) => Promise<boolean>
+  reorderPhases: (orderedIds: number[]) => Promise<void>
   // モーダル用の状態
   newPhaseName: string
   setNewPhaseName: React.Dispatch<React.SetStateAction<string>>
@@ -141,6 +142,24 @@ export const usePhases = (): UsePhasesReturn => {
     return true
   }
 
+  // フェーズの並び順を一括更新（D&D用）
+  const reorderPhases = async (orderedIds: number[]) => {
+    setPhases(prev => {
+      const updated = prev.map(p => {
+        const idx = orderedIds.indexOf(p.id)
+        if (idx !== -1) return { ...p, sort_order: idx + 1 }
+        return p
+      })
+      return updated.sort((a, b) => a.sort_order - b.sort_order)
+    })
+
+    await Promise.all(
+      orderedIds.map((id, idx) =>
+        supabase.from('phases').update({ sort_order: idx + 1 }).eq('id', id)
+      )
+    )
+  }
+
   return {
     phases,
     setPhases,
@@ -149,6 +168,7 @@ export const usePhases = (): UsePhasesReturn => {
     addPhase,
     updatePhase,
     deletePhase,
+    reorderPhases,
     newPhaseName,
     setNewPhaseName,
     editingPhase,
