@@ -466,9 +466,8 @@ export default function KaetaWBS() {
                       {(category ? isCategoryOpen : true) && (
                         <>
                           {categoryTasks.map((task, taskIndex) => {
-                            const hasChildren = categoryTasks.some((t, i) =>
-                              i > taskIndex && (t.indent_level || 0) > (task.indent_level || 0)
-                            )
+                            const hasChildren = taskIndex < categoryTasks.length - 1 &&
+                              (categoryTasks[taskIndex + 1].indent_level || 0) > (task.indent_level || 0)
                             const isHidden = (() => {
                               for (let i = taskIndex - 1; i >= 0; i--) {
                                 const prevTask = categoryTasks[i]
@@ -517,7 +516,7 @@ export default function KaetaWBS() {
                               setShowTaskModal(true)
                             }}
                           >
-                            <span className="text-xs text-dashboard-text-muted group-hover/addtask:text-accent-blue flex items-center gap-1">
+                            <span className="text-xs text-dashboard-text-muted group-hover/addtask:text-accent-blue-text flex items-center gap-1">
                               <span className="text-base leading-none">＋</span>
                               タスクを追加
                             </span>
