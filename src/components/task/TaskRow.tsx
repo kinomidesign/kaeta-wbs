@@ -186,7 +186,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
               {formatDateDisplay(task.start_date)} - {formatDateDisplay(task.end_date)}
             </button>
           ) : (
-            <span className="text-xs text-dashboard-text-muted">日付</span>
+            <span className="text-xs text-dashboard-text-muted">未設定</span>
           )}
         </div>
 
