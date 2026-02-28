@@ -30,7 +30,7 @@ interface TaskModalProps {
   onClose: () => void
   onSave: () => void
   onDelete?: () => void
-  onOpenCategoryModal: (phaseId: number) => void
+  onOpenCategoryModal: () => void
   onOpenPhaseModal: () => void
 }
 
@@ -277,7 +277,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <label className="text-sm text-dashboard-text-muted">カテゴリ</label>
                 <button
                   type="button"
-                  onClick={() => selectedPhase && onOpenCategoryModal(selectedPhase.id)}
+                  onClick={() => onOpenCategoryModal()}
                   className="text-dashboard-text-muted hover:text-dashboard-text-main"
                   title="カテゴリを編集"
                 >

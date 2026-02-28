@@ -68,10 +68,6 @@ export default function KaetaWBS() {
     deleteCategory,
     moveCategoryOrder,
     reorderCategories,
-    newCategoryName,
-    setNewCategoryName,
-    selectedPhaseForCategory,
-    setSelectedPhaseForCategory,
     editingCategory,
     setEditingCategory
   } = useCategories()
@@ -678,8 +674,7 @@ export default function KaetaWBS() {
           }}
           onSave={handleSaveTask}
           onDelete={taskModalMode === 'edit' ? handleDeleteTask : undefined}
-          onOpenCategoryModal={(phaseId) => {
-            setSelectedPhaseForCategory(phaseId)
+          onOpenCategoryModal={() => {
             setShowCategoryModal(true)
           }}
           onOpenPhaseModal={() => setShowPhaseModal(true)}
@@ -707,18 +702,10 @@ export default function KaetaWBS() {
         <CategoryModal
           phases={phases}
           categories={categories}
-          newCategoryName={newCategoryName}
-          setNewCategoryName={setNewCategoryName}
-          selectedPhaseForCategory={selectedPhaseForCategory}
-          setSelectedPhaseForCategory={setSelectedPhaseForCategory}
           editingCategory={editingCategory}
           setEditingCategory={setEditingCategory}
           onClose={() => setShowCategoryModal(false)}
-          onAddCategory={() => {
-            if (selectedPhaseForCategory) {
-              addCategory(newCategoryName, selectedPhaseForCategory)
-            }
-          }}
+          onAddCategory={(name, phaseId) => addCategory(name, phaseId)}
           onUpdateCategory={(id, name) => updateCategory(id, name, phases, fetchTasks)}
           onDeleteCategory={(id) => deleteCategory(id, phases, tasks, fetchTasks)}
           onMoveCategoryOrder={moveCategoryOrder}

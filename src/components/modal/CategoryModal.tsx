@@ -4,14 +4,10 @@ import type { Phase, Category } from '@/types'
 interface CategoryModalProps {
   phases: Phase[]
   categories: Category[]
-  newCategoryName: string
-  setNewCategoryName: (name: string) => void
-  selectedPhaseForCategory: number | null
-  setSelectedPhaseForCategory: (phaseId: number | null) => void
   editingCategory: Category | null
   setEditingCategory: (category: Category | null) => void
   onClose: () => void
-  onAddCategory: () => void
+  onAddCategory: (name: string, phaseId: number) => void
   onUpdateCategory: (id: number, name: string) => void
   onDeleteCategory: (id: number) => void
   onMoveCategoryOrder: (categoryId: number, direction: 'up' | 'down') => void
@@ -21,10 +17,6 @@ interface CategoryModalProps {
 export const CategoryModal: React.FC<CategoryModalProps> = ({
   phases,
   categories,
-  newCategoryName,
-  setNewCategoryName,
-  selectedPhaseForCategory,
-  setSelectedPhaseForCategory,
   editingCategory,
   setEditingCategory,
   onClose,
@@ -54,17 +46,13 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       editInputRef.current.focus()
       editInputRef.current.select()
     }
-  }, [editingCategory])
+  }, [editingCategory?.id])
 
   const handleAddSubmit = (phaseId: number) => {
     if (!localNewName.trim()) return
-    setNewCategoryName(localNewName.trim())
-    setSelectedPhaseForCategory(phaseId)
-    setTimeout(() => {
-      onAddCategory()
-      setLocalNewName('')
-      setAddingToPhase(null)
-    }, 0)
+    onAddCategory(localNewName.trim(), phaseId)
+    setLocalNewName('')
+    setAddingToPhase(null)
   }
 
   const handleAddKeyDown = (e: React.KeyboardEvent, phaseId: number) => {

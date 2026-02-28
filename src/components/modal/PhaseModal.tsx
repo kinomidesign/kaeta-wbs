@@ -46,7 +46,7 @@ export const PhaseModal: React.FC<PhaseModalProps> = ({
       editInputRef.current.focus()
       editInputRef.current.select()
     }
-  }, [editingPhase])
+  }, [editingPhase?.id])
 
   const handleAddSubmit = () => {
     if (!newPhaseName.trim()) return
